@@ -37,7 +37,9 @@ Deno.serve(async (req) => {
   if (!cfg.secret || req.headers.get("x-hala-secret") !== cfg.secret) return new Response("forbidden", { status: 403 });
   if (!cfg.pub || !cfg.priv) return new Response("push keys not set up yet", { status: 200 });
 
-  const { id } = await req.json().catch(() => ({ id: null }));
+  const input = await req.json().catch(() => ({}));
+  if (input.event_id) return crowdEvent(input.event_id);
+  const id = input.id;
   if (!id) return new Response("bad request", { status: 400 });
 
   const BASE = "id,user_id,channel,body,image_path,poll,gif_url,sticker,audio_path,mentions,reply_to";
@@ -97,3 +99,35 @@ Deno.serve(async (req) => {
   if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
   return new Response(`sent ${subs.size - dead.length}`, { status: 200 });
 });
+
+// Crowd-confirmed goal or "the stadium exploded" moment: tell people who predicted the match
+// or were in its room recently, but not those active in the room in the last 2 minutes (they saw it).
+async function crowdEvent(eventId: number) {
+  const { data: ev } = await sb.from("crowd_events").select("id,match_id,kind,side,emoji,minute").eq("id", eventId).maybeSingle();
+  if (!ev) return new Response("gone", { status: 200 });
+  const { data: m } = await sb.from("matches").select("id,channel,home,away").eq("id", ev.match_id).maybeSingle();
+  if (!m) return new Response("gone", { status: 200 });
+  const since = (min: number) => new Date(Date.now() - min * 60000).toISOString();
+  const [{ data: preds }, { data: r30 }, { data: mo30 }, { data: r2 }, { data: rep2 }] = await Promise.all([
+    sb.from("predictions").select("user_id").eq("match_id", m.id),
+    sb.from("live_reactions").select("user_id").eq("match_id", m.id).gte("created_at", since(40)),
+    sb.from("momentum").select("user_id").eq("match_id", m.id).gte("updated_at", since(40)),
+    sb.from("live_reactions").select("user_id").eq("match_id", m.id).gte("created_at", since(2)),
+    sb.from("live_reports").select("user_id").eq("match_id", m.id).gte("created_at", since(3)),
+  ]);
+  const watching = new Set([...(r2 || []), ...(rep2 || [])].map((x) => x.user_id));
+  const users = new Set([...(preds || []), ...(r30 || []), ...(mo30 || [])].map((x) => x.user_id).filter((u) => !watching.has(u)));
+  if (!users.size) return new Response("no one to tell", { status: 200 });
+  const { data: subs } = await sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").in("user_id", [...users]);
+  const team = ev.side === "home" ? m.home : m.away;
+  const payload = JSON.stringify(ev.kind === "goal"
+    ? { title: `⚽ جوول لـ${team}! (حسب المدرج)`, body: `${m.home} × ${m.away}${ev.minute ? ` · د ${ev.minute}'` : ""} · ادخل الغرفة وشوف ردة فعل الجمهور`, url: `./?league=${m.channel}&view=pred`, tag: `crowd-${m.id}` }
+    : { title: `💥 المدرج انفجر! ${ev.emoji || "🔥"}`, body: `شي كبير صار في ${m.home} × ${m.away}. ادخل الغرفة`, url: `./?league=${m.channel}&view=pred`, tag: `crowd-${m.id}` });
+  const dead: string[] = [];
+  await Promise.all((subs || []).map(async (s) => {
+    try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 600 }); }
+    catch (e) { const c = (e as { statusCode?: number }).statusCode; if (c === 404 || c === 410) dead.push(s.endpoint); }
+  }));
+  if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
+  return new Response(`crowd sent ${(subs || []).length - dead.length}`, { status: 200 });
+}

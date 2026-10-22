@@ -390,6 +390,58 @@ svg.pitch .pl { cursor: grab; }
 .evlist { display: flex; flex-direction: column; gap: 4px; } .evlist h4 { margin: 0; }
 .ev { font-size: 13.5px; background: var(--card); border-radius: 8px; padding: 6px 10px; }
 
+/* Live mode */
+.livebanner { background: var(--pitch-2); border-bottom: 1px solid var(--line); padding: 6px max(16px, env(safe-area-inset-right, 0px)) 6px max(16px, env(safe-area-inset-left, 0px)); display: flex; gap: 6px; overflow-x: auto; flex: none; }
+.livechip { flex: none; display: flex; align-items: center; gap: 8px; border: 1px solid #ff4b3e; background: rgba(255,75,62,.12); color: var(--chalk); border-radius: 999px; padding: 6px 12px; font: 700 13px var(--body); cursor: pointer; white-space: nowrap; }
+.livechip .dot, .rmeta .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff4b3e; animation: blink 1s infinite; }
+.livechip .lm { color: var(--muted); font-weight: 600; } .livechip .go { color: #ff7a6b; }
+.roomtag { display: block; border: 0; background: none; color: #ff7a6b; font: 700 11px var(--body); padding: 0 0 2px; cursor: pointer; text-align: start; }
+.room { position: fixed; inset: 0; z-index: 12; background: var(--pitch); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.rhead { flex: none; background: var(--league); color: var(--league-ink); padding: 8px max(12px, env(safe-area-inset-right, 0px)) 10px max(12px, env(safe-area-inset-left, 0px)); display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+.rhead .ghost { color: inherit; border-color: currentColor; opacity: .85; }
+.rteams { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; text-align: center; }
+.rteams b { font-size: 15px; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rscore { font: 400 30px/1 var(--display); direction: rtl; unicode-bidi: isolate; background: rgba(0,0,0,.18); border-radius: 10px; padding: 4px 10px; }
+.rscore.crowd::after { content: "*"; font-size: 16px; vertical-align: top; }
+.rmeta { display: flex; flex-direction: column; align-items: flex-end; font-size: 12px; font-weight: 700; gap: 2px; }
+.rcrowd { flex: none; text-align: center; font-size: 12px; color: var(--muted); padding: 4px 12px; background: var(--pitch-2); border-bottom: 1px solid var(--line); }
+.rbody { flex: 1; min-height: 0; overflow-y: auto; padding: 10px max(12px, env(safe-area-inset-right, 0px)) 10px max(12px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 10px; }
+.rsec { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.rlabel { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; } .rlabel span { color: var(--muted); font-size: 12px; }
+.mombar { display: flex; height: 22px; border-radius: 11px; overflow: hidden; background: var(--pitch-2); font: 800 12px var(--body); }
+.mombar span { display: grid; place-items: center; transition: width .6s; }
+#rMomHome { background: var(--league); color: var(--league-ink); width: 50%; } #rMomAway { background: #e9eef0; color: #111; width: 50%; }
+.momnames { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--muted); }
+#rMom { width: 100%; accent-color: var(--league); }
+.pulse { min-height: 70px; } .pulsesvg { width: 100%; height: 80px; display: block; }
+.qpolls { display: flex; gap: 6px; overflow-x: auto; }
+.chipq { flex: none; border: 1px solid var(--line); background: var(--pitch-2); color: var(--chalk); border-radius: 999px; padding: 6px 12px; font: 700 13px var(--body); cursor: pointer; }
+.rfeed { display: flex; flex-direction: column; gap: 6px; }
+.rreact { flex: none; display: flex; justify-content: space-around; padding: 6px max(10px, env(safe-area-inset-right, 0px)) 4px max(10px, env(safe-area-inset-left, 0px)); background: var(--pitch-2); border-top: 1px solid var(--line); }
+.rbtn { border: 0; background: var(--card); width: 48px; height: 48px; border-radius: 50%; font-size: 24px; cursor: pointer; transition: transform .1s; touch-action: manipulation; }
+.rbtn:active { transform: scale(1.25); }
+.rcompose { flex: none; display: flex; gap: 8px; align-items: center; padding: 8px max(12px, env(safe-area-inset-right, 0px)) 10px max(12px, env(safe-area-inset-left, 0px)); background: var(--pitch-2); }
+.rcompose input { flex: 1; min-width: 0; font: 15px var(--body); color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 10px 14px; }
+.goalbtn { flex: none; border: 0; border-radius: 22px; padding: 10px 12px; background: #ffd84a; color: #1c1600; font: 800 14px var(--body); cursor: pointer; }
+.floats { position: fixed; inset: 0; pointer-events: none; z-index: 13; overflow: hidden; }
+.fl { position: absolute; bottom: 130px; animation: floatup 2.5s ease-out forwards; filter: drop-shadow(0 2px 4px rgba(0,0,0,.4)); }
+.fl.mine { bottom: 120px; }
+@keyframes floatup { 0% { transform: translate(0, 0) scale(.6); opacity: 0; } 15% { opacity: 1; transform: translate(calc(var(--drift) * .2), -40px) scale(1.1); } 100% { transform: translate(var(--drift), -420px) scale(1); opacity: 0; } }
+.celebrate { position: fixed; inset: 0; z-index: 14; display: grid; place-items: center; pointer-events: none; text-align: center; font: 400 64px/1.2 var(--display); color: #fff; text-shadow: 0 6px 30px rgba(0,0,0,.6); background: radial-gradient(circle, rgba(0,0,0,.45), transparent 70%); }
+.celebrate small { display: block; font: 800 22px var(--body); }
+.celebrate.show { animation: celeb 2.6s ease-out; }
+@keyframes celeb { 0% { transform: scale(.4); opacity: 0; } 15% { transform: scale(1.1); opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; transform: scale(1); } }
+.goalpick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.toast.live { cursor: pointer; border: 0; font-family: var(--body); z-index: 31; }
+.reportimg { width: 100%; border-radius: 12px; }
+.reportbtn { width: 100%; }
+.lvl { display: flex; justify-content: space-between; align-items: baseline; } .lvl b { font: 400 24px var(--display); color: var(--turf); } .lvl span { color: var(--muted); font-weight: 700; }
+.xpbar { height: 10px; border-radius: 5px; background: var(--card); overflow: hidden; } .xpbar span { display: block; height: 100%; background: linear-gradient(90deg, #2fbf5b, #e3c84a); }
+.stgrid2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stgrid2 div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px; text-align: center; display: flex; flex-direction: column; }
+.stgrid2 b { font: 400 22px var(--display); } .stgrid2 small { color: var(--muted); font-size: 11.5px; }
+@media (prefers-reduced-motion: reduce) { .fl, .celebrate.show { animation-duration: .01s; } }
+
 .viewer { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.92); display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px)); cursor: zoom-out; }
 .viewer img { max-width: 100%; max-height: 100%; border-radius: 8px; }
 @media (prefers-reduced-motion: no-preference) {
@@ -506,7 +558,8 @@ svg.pitch .pl { cursor: grab; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=11"></script>
-<script src="tactics.js?v=11"></script>
+<script src="app.js?v=12"></script>
+<script src="tactics.js?v=12"></script>
+<script src="live.js?v=12"></script>
 </body>
 </html>

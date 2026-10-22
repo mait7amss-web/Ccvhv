@@ -21,7 +21,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 11; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 12; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -249,9 +249,11 @@ function renderMe() {
 /* ---------- Messages, reactions, votes ---------- */
 async function loadChannel(ch) {
   const BASE = "id,user_id,channel,body,image_path,poll,created_at,hidden,reply_to,mentions,gif_url,sticker,audio_path,audio_secs";
-  let { data, error } = await sb.from("messages").select(BASE + ",tactic,scenario,debate")
-    .eq("channel", ch).order("created_at", { ascending: false }).limit(PAGE);
-  if (error) ({ data, error } = await sb.from("messages").select(BASE).eq("channel", ch).order("created_at", { ascending: false }).limit(PAGE));
+  let data, error;
+  for (const cols of [BASE + ",tactic,scenario,debate,match_id", BASE + ",tactic,scenario,debate", BASE]) {
+    ({ data, error } = await sb.from("messages").select(cols).eq("channel", ch).order("created_at", { ascending: false }).limit(PAGE));
+    if (!error) break;
+  }
   if (error) { showErr("ما قدرنا نجيب الرسائل. تأكد من الاتصال."); return; }
   const fresh = (data || []).reverse();
   const extra = (byChannel[ch] || []).filter(m => !fresh.some(f => f.id === m.id));
@@ -493,6 +495,7 @@ function messageRow(m, cont) {
     pic.onclick = (e) => { e.stopPropagation(); if (pic.src) { $("viewerImg").src = pic.src; $("viewer").hidden = false; } };
     b.append(pic);
   }
+  if (m.match_id && typeof roomTag === "function") { const tg = roomTag(m); if (tg) b.append(tg); }
   if (m.reply_to) {
     const orig = findMsg(m.reply_to);
     const q = el("button", "quote"); q.type = "button";
@@ -803,6 +806,7 @@ $("meBtn").onclick = () => openSheet("ملفي", (s) => {
     try { const sub = await currentSub(); if (sub) { await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint); await sub.unsubscribe(); } } catch {}
     sb.auth.signOut();
   };
+  const stBox = el("div", "notif"); s.append(stBox); renderStats(stBox);
   const box = el("div", "notif"); s.append(box);
   renderNotif(box);
   const safety = el("div", "notif");
@@ -1056,6 +1060,8 @@ function matchCard(m, preds, started) {
   const tools = el("div", "mrow");
   if (m.lineups) { const b = el("button", "small", "📋 التشكيلة"); b.type = "button"; b.onclick = () => lineupSheet(m); tools.append(b); }
   if (started) { const b = el("button", "small", "⭐ قيّم اللاعبين"); b.type = "button"; b.onclick = () => ratingsSheet(m); tools.append(b); }
+  if (inLiveWindow(m)) { const b = el("button", "small pri", "🔴 غرفة المباراة"); b.type = "button"; b.onclick = () => enterRoom(m); tools.prepend(b); }
+  else if (started && Date.now() - new Date(m.kickoff) < 4 * 86400000) { const b = el("button", "small", "📊 تقرير المدرج"); b.type = "button"; b.onclick = () => matchReport(m); tools.append(b); }
   if (tools.childNodes.length) card.append(tools);
   const by = el("div", null, m.created_by ? "أضافها " + nameOf(m.created_by) : "🤖 مباراة رسمية، النتيجة تنحط تلقائي");
   by.style.cssText = "font-size:11px;color:var(--muted)";
