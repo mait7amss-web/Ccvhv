@@ -3,4 +3,5 @@
 window.HALA_CONFIG = {
   supabaseUrl: "https://bnjwhkilboybexkdvufc.supabase.co",
   supabaseAnonKey: "sb_publishable_1rjzaOLaYJqDTK8PSU7uQA_so1IgwJD",
+  supportEmail: "mait7am.ss@gmail.com", // يظهر في صفحة الخصوصية للتواصل
 };
