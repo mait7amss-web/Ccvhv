@@ -21,7 +21,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 10; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 11; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -248,9 +248,10 @@ function renderMe() {
 
 /* ---------- Messages, reactions, votes ---------- */
 async function loadChannel(ch) {
-  const { data, error } = await sb.from("messages")
-    .select("id,user_id,channel,body,image_path,poll,created_at,hidden,reply_to,mentions,gif_url,sticker,audio_path,audio_secs")
+  const BASE = "id,user_id,channel,body,image_path,poll,created_at,hidden,reply_to,mentions,gif_url,sticker,audio_path,audio_secs";
+  let { data, error } = await sb.from("messages").select(BASE + ",tactic,scenario,debate")
     .eq("channel", ch).order("created_at", { ascending: false }).limit(PAGE);
+  if (error) ({ data, error } = await sb.from("messages").select(BASE).eq("channel", ch).order("created_at", { ascending: false }).limit(PAGE));
   if (error) { showErr("ما قدرنا نجيب الرسائل. تأكد من الاتصال."); return; }
   const fresh = (data || []).reverse();
   const extra = (byChannel[ch] || []).filter(m => !fresh.some(f => f.id === m.id));
@@ -266,6 +267,7 @@ async function loadChannel(ch) {
   for (const x of r.data || []) reacts[x.message_id].push({ user_id: x.user_id, emoji: x.emoji });
   for (const id of pollIds) votes[id] = {};
   for (const x of v.data || []) votes[x.message_id][x.user_id] = x.option;
+  await loadExtras(byChannel[ch]).catch(() => {});
 }
 
 // Signed URLs are cached per path; audio paths are stored under "a:" + path.
@@ -334,6 +336,7 @@ async function startChat() {
       if (view !== "chat" && !document.activeElement?.classList.contains("goal")) refreshView();
     })
     .subscribe();
+  startExtrasRealtime();
   await openChannel(channel);
 }
 
@@ -433,6 +436,9 @@ function snippet(m) {
   if (!m) return "رسالة محذوفة";
   if (m.body) return m.body.length > 80 ? m.body.slice(0, 79) + "…" : m.body;
   if (m.poll) return "📊 " + m.poll.question;
+  if (m.tactic) return "🧠 " + (m.tactic.title || "لوحة تكتيك");
+  if (m.scenario) return "🎯 لو أنت المدرب: " + m.scenario.text;
+  if (m.debate) return "⚔️ " + m.debate.question;
   if (m.image_path || m.localUrl) return "📷 صورة";
   if (m.gif_url) return "GIF";
   if (m.sticker) return "ملصق " + (STICKERS.find(s => s[0] === m.sticker)?.[1] || OLD_STICKERS[m.sticker] || "");
@@ -505,7 +511,10 @@ function messageRow(m, cont) {
   }
   if (m.audio_path || m.localAudio) b.append(voiceEl(m));
   if (m.poll) b.append(pollEl(m));
-  if (m.body) b.append(bodyEl(m));
+  if (m.tactic) b.append(tacticCard(m));
+  if (m.scenario) b.append(scenarioCard(m));
+  if (m.debate) b.append(debateCard(m));
+  if (m.body && !m.tactic) b.append(bodyEl(m));
   const list = reacts[m.id] || [];
   if (list.length) {
     const box = el("div", "reacts");
@@ -684,9 +693,14 @@ $("picker").addEventListener("change", async () => {
   $("picker").value = "";
   if (!file) return;
   if (!file.type.startsWith("image/")) { showErr("اختر صورة فقط."); return; }
-  showErr("");
   const caption = msgEl.value.trim();
   msgEl.value = ""; grow();
+  sendImageBlob(file, caption);
+});
+
+// Uploads an image (photo or an analysed frame) and posts it, with an optional caption.
+async function sendImageBlob(file, caption) {
+  showErr("");
   const tmp = { id: "tmp" + Date.now(), user_id: me.id, channel, body: caption, created_at: new Date().toISOString(), localUrl: URL.createObjectURL(file), pending: true };
   pending.push(tmp); render(true);
   $("attachBtn").disabled = true;
@@ -710,7 +724,7 @@ $("picker").addEventListener("change", async () => {
     $("attachBtn").disabled = false;
     render(false);
   }
-});
+}
 
 /* ---------- Bottom sheet ---------- */
 function openSheet(title, build) {
@@ -923,9 +937,11 @@ function adminSheet() {
 
 /* ---------- Matches & predictions ---------- */
 async function loadMatches(ch) {
-  const { data: matches, error } = await sb.from("matches")
-    .select("id,channel,created_by,home,away,kickoff,home_score,away_score,status,external_id")
+  const MBASE = "id,channel,created_by,home,away,kickoff,home_score,away_score,status,external_id";
+  let { data: matches, error } = await sb.from("matches").select(MBASE + ",lineups,events")
     .eq("channel", ch).order("kickoff", { ascending: false }).limit(150);
+  if (error) ({ data: matches, error } = await sb.from("matches").select(MBASE).eq("channel", ch).order("kickoff", { ascending: false }).limit(150));
+  for (const m of matches || []) matchCache[m.id] = m;
   if (error) { matchData[ch] = { matches: [], preds: {}, error: true }; return; }
   const ids = matches.map(m => m.id);
   const { data: preds } = ids.length
@@ -1037,6 +1053,10 @@ function matchCard(m, preds, started) {
     }
     card.append(list);
   }
+  const tools = el("div", "mrow");
+  if (m.lineups) { const b = el("button", "small", "📋 التشكيلة"); b.type = "button"; b.onclick = () => lineupSheet(m); tools.append(b); }
+  if (started) { const b = el("button", "small", "⭐ قيّم اللاعبين"); b.type = "button"; b.onclick = () => ratingsSheet(m); tools.append(b); }
+  if (tools.childNodes.length) card.append(tools);
   const by = el("div", null, m.created_by ? "أضافها " + nameOf(m.created_by) : "🤖 مباراة رسمية، النتيجة تنحط تلقائي");
   by.style.cssText = "font-size:11px;color:var(--muted)";
   card.append(by);
@@ -1297,6 +1317,10 @@ $("plusBtn").onclick = () => openSheet("أرسل", (s) => {
   item("📷", "صورة من الاستديو", "صورة أو GIF من جوالك", () => $("attachBtn").click());
   item("📊", "تصويت", "سؤال مع خيارين لين أربعة", () => $("pollBtn").click());
   item("😎", "ملصق أو GIF", "ملصقات الكورة أو بحث GIF", () => $("stickerBtn").click());
+  item("🧠", "لوحة تكتيك", "ارسم الخطة والتحركات على الملعب", () => tacticEditor());
+  item("🎥", "حلّل لقطة", "ارسم أسهم ودواير على صورة من المباراة", () => $("telePicker").click());
+  item("🎯", "لو أنت المدرب", "اطرح موقف، والكل يقول وش قراره", () => scenarioComposer());
+  item("⚔️", "مناظرة", "سؤال بطرفين، وأقوى حجة تفوز", () => debateComposer());
   s.append(list);
 });
 

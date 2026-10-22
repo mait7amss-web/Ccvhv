@@ -40,9 +40,9 @@ Deno.serve(async (req) => {
   const { id } = await req.json().catch(() => ({ id: null }));
   if (!id) return new Response("bad request", { status: 400 });
 
-  const { data: msg } = await sb.from("messages")
-    .select("id,user_id,channel,body,image_path,poll,gif_url,sticker,audio_path,mentions,reply_to")
-    .eq("id", id).maybeSingle();
+  const BASE = "id,user_id,channel,body,image_path,poll,gif_url,sticker,audio_path,mentions,reply_to";
+  let { data: msg, error } = await sb.from("messages").select(BASE + ",tactic,scenario,debate").eq("id", id).maybeSingle();
+  if (error) ({ data: msg } = await sb.from("messages").select(BASE).eq("id", id).maybeSingle());
   if (!msg) return new Response("gone", { status: 200 });
 
   const { data: replied } = msg.reply_to
@@ -62,7 +62,10 @@ Deno.serve(async (req) => {
   for (const s of [...(leagueSubs || []), ...(directSubs || [])]) if (!blocked.has(s.user_id)) subs.set(s.endpoint, s);
   if (!subs.size) return new Response("no subscribers", { status: 200 });
 
-  const text = msg.poll ? `📊 تصويت: ${msg.poll.question}`
+  const text = msg.tactic ? `🧠 لوحة تكتيك: ${msg.tactic.title || ""}`
+    : msg.scenario ? `🎯 لو أنت المدرب: ${msg.scenario.text}`
+    : msg.debate ? `⚔️ مناظرة: ${msg.debate.question}`
+    : msg.poll ? `📊 تصويت: ${msg.poll.question}`
     : msg.body ? msg.body
     : msg.audio_path ? "🎤 رسالة صوتية"
     : msg.sticker ? "ملصق 😄"

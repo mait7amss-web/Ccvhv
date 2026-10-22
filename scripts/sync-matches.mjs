@@ -17,25 +17,7 @@ const COMPETITIONS = { PL: "epl", PD: "laliga", SA: "seriea", BL1: "bundesliga",
 const DAYS_BACK = 3;   // catch late results
 const DAYS_AHEAD = 7;  // free tier allows a 10-day window per request
 
-// Arabic names keyed by football-data team id (checked against the API's own team list); others keep the API short name.
-const AR = {
-  57: "أرسنال", 58: "أستون فيلا", 61: "تشيلسي", 64: "ليفربول", 65: "مانشستر سيتي", 66: "مانشستر يونايتد",
-  67: "نيوكاسل", 73: "توتنهام", 62: "إيفرتون", 563: "وست هام", 354: "كريستال بالاس", 397: "برايتون",
-  402: "برينتفورد", 351: "نوتنغهام فورست", 76: "وولفرهامبتون", 63: "فولهام", 1044: "بورنموث",
-  86: "ريال مدريد", 81: "برشلونة", 78: "أتلتيكو مدريد", 559: "إشبيلية", 92: "ريال سوسيداد", 90: "ريال بيتيس",
-  77: "أتلتيك بلباو", 94: "فياريال", 95: "فالنسيا", 558: "سيلتا فيغو", 79: "أوساسونا", 82: "خيتافي", 89: "مايوركا",
-  109: "يوفنتوس", 108: "إنتر", 98: "ميلان", 113: "نابولي", 100: "روما", 110: "لاتسيو", 102: "أتالانتا",
-  99: "فيورنتينا", 103: "بولونيا", 586: "تورينو", 115: "أودينيزي", 107: "جنوى",
-  5: "بايرن ميونخ", 4: "بوروسيا دورتموند", 3: "باير ليفركوزن", 721: "لايبزيغ", 19: "آينتراخت فرانكفورت",
-  10: "شتوتغارت", 18: "مونشنغلادباخ", 11: "فولفسبورغ", 17: "فرايبورغ", 2: "هوفنهايم", 12: "فيردر بريمن", 1: "كولن",
-  524: "باريس سان جيرمان", 516: "مارسيليا", 523: "ليون", 548: "موناكو", 521: "ليل", 522: "نيس", 546: "لانس",
-  529: "رين", 576: "ستراسبورغ", 543: "نانت", 512: "بريست", 533: "لوهافر",
-  71: "سندرلاند", 341: "ليدز يونايتد", 1076: "كوفنتري", 349: "إيبسويتش", 322: "هال سيتي",
-  87: "رايو فايكانو", 88: "ليفانتي", 263: "ألافيس", 84: "ملقة", 285: "إلتشي", 5335: "راسينغ سانتاندير", 80: "إسبانيول", 560: "ديبورتيفو لاكورونيا",
-  5911: "مونزا", 104: "كالياري", 112: "بارما", 7397: "كومو", 471: "ساسولو", 470: "فروزينوني", 454: "فينيزيا", 5890: "ليتشي",
-  15: "ماينتس", 6: "شالكه", 719: "إلفرسبيرغ", 29: "بادربورن", 7: "هامبورغ", 16: "أوغسبورغ", 28: "يونيون برلين",
-  1045: "باريس إف سي", 532: "أنجيه", 525: "لوريان", 511: "تولوز", 531: "تروا", 519: "أوكسير", 535: "لومان",
-};
+import { AR } from "./teams.mjs";
 const teamName = (t) => (AR[t.id] || t.shortName || t.name || "؟").slice(0, 40);
 
 const iso = (d) => d.toISOString().slice(0, 10);
@@ -70,6 +52,8 @@ function toRow(m, channel) {
     created_by: null,
     home: teamName(m.homeTeam),
     away: teamName(m.awayTeam),
+    home_en: (m.homeTeam.name || m.homeTeam.shortName || "").slice(0, 60),
+    away_en: (m.awayTeam.name || m.awayTeam.shortName || "").slice(0, 60),
     kickoff: m.utcDate,
     status: m.status,
     // Only store a score once the match is over, so points aren't handed out mid-game.
@@ -78,14 +62,20 @@ function toRow(m, channel) {
   };
 }
 
+let hasEnglishCols = true; // false until supabase/tactics.sql has been run
 async function upsert(rows) {
   if (!rows.length) return;
+  if (!hasEnglishCols) rows = rows.map(({ home_en, away_en, ...r }) => r);
   const res = await fetch(`${SUPABASE_URL}/rest/v1/matches?on_conflict=external_id`, {
     method: "POST",
     headers: { ...sbHeaders, Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify(rows),
   });
-  if (!res.ok) throw new Error(`Supabase ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    if (hasEnglishCols && /home_en|away_en/.test(text)) { hasEnglishCols = false; return upsert(rows); }
+    throw new Error(`Supabase ${res.status} ${text}`);
+  }
 }
 
 let failed = false;
