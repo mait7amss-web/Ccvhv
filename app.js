@@ -44,7 +44,15 @@ let channel = CHANNELS[0].id;
 let view = "chat";             // chat | pred | table
 try { channel = localStorage.getItem("hala.channel") || channel; view = localStorage.getItem("hala.view") || view; } catch {}
 if (!CHANNELS.some(c => c.id === channel)) channel = CHANNELS[0].id;
+{ // Opened from a notification: ?league=epl&view=pred
+  const q = new URLSearchParams(location.search);
+  if (q.get("league")) channel = q.get("league");
+  if (q.get("view")) view = q.get("view");
+  if (q.has("league") || q.has("view")) history.replaceState(null, "", location.pathname);
+}
+if (!CHANNELS.some(c => c.id === channel)) channel = CHANNELS[0].id;
 if (!["chat", "pred", "table"].includes(view)) view = "chat";
+const swReady = "serviceWorker" in navigator ? navigator.serviceWorker.register("sw.js").catch(() => null) : Promise.resolve(null);
 
 const byChannel = {};          // channel -> messages[] (ascending)
 const people = {};             // user_id -> { name, team }
@@ -659,7 +667,13 @@ $("meBtn").onclick = () => openSheet("ملفي", (s) => {
     renderMe(); refreshView();
   });
   const out = el("button", "link danger", "تسجيل خروج"); out.type = "button";
-  out.onclick = () => { closeSheet(); sb.auth.signOut(); };
+  out.onclick = async () => {
+    closeSheet();
+    try { const sub = await currentSub(); if (sub) { await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint); await sub.unsubscribe(); } } catch {}
+    sb.auth.signOut();
+  };
+  const box = el("div", "notif"); s.append(box);
+  renderNotif(box);
   s.append(out);
 });
 
@@ -885,4 +899,91 @@ function renderTable() {
     t.append(tb); wrap.append(t); box.append(wrap);
   }
   box.append(el("div", "rules", "النقاط: ٣ إذا جبت النتيجة بالضبط، و١ إذا جبت الفايز أو التعادل بس. اللي يضيف المباراة هو اللي يحط نتيجتها."));
+}
+
+/* ---------- Push notifications ---------- */
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const pushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+
+async function currentSub() {
+  const reg = await swReady; if (!reg) return null;
+  return reg.pushManager.getSubscription();
+}
+function b64ToBytes(b64) {
+  const pad = "=".repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+
+async function renderNotif(box) {
+  box.textContent = "";
+  box.append(el("h4", null, "🔔 الإشعارات"));
+  if (isIOS && !isStandalone()) {
+    box.append(el("p", null, "عشان توصلك الإشعارات على الآيفون، لازم تضيف التطبيق للشاشة الرئيسية:"));
+    const ol = el("ol", "steps");
+    for (const t of ["اضغط زر المشاركة ⬆️ تحت في Safari", "اختر Add to Home Screen (إضافة إلى الشاشة الرئيسية)", "افتح مدرج هلا من الأيقونة الجديدة", "ارجع هنا وفعّل الإشعارات"]) ol.append(el("li", null, t));
+    box.append(ol);
+    return;
+  }
+  if (!pushSupported()) { box.append(el("p", null, "هالمتصفح ما يدعم الإشعارات. جرّب Chrome أو Safari بآخر تحديث.")); return; }
+  if (Notification.permission === "denied") { box.append(el("p", null, "الإشعارات مقفلة لهالموقع. فعّلها من إعدادات الجوال أو المتصفح، وبعدها ارجع هنا.")); return; }
+
+  const sub = await currentSub();
+  const { data: row } = sub ? await sb.from("push_subscriptions").select("*").eq("endpoint", sub.endpoint).maybeSingle() : { data: null };
+  if (!sub || !row) {
+    box.append(el("p", null, "تذكير قبل المباراة إذا ما توقعت، ونتيجتك أول ما تخلص، ورسايل الدوريات اللي تختارها."));
+    const on = el("button", "primary", "فعّل الإشعارات"); on.type = "button";
+    const err = el("div", "err"); err.hidden = true;
+    on.onclick = async () => {
+      on.disabled = true; err.hidden = true;
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") throw new Error("لازم تسمح بالإشعارات عشان توصلك.");
+        const { data: k } = await sb.from("app_public").select("value").eq("key", "vapid_public").maybeSingle();
+        if (!k?.value) throw new Error("الإشعارات للحين ما تجهزت من جهة السيرفر. جرّب بعد شوي.");
+        const reg = await swReady; if (!reg) throw new Error("ما قدرنا نشغّل الإشعارات على هالجهاز.");
+        const s2 = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(k.value) });
+        const j = s2.toJSON();
+        const { error } = await sb.from("push_subscriptions").upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_id: me.id, leagues: [channel] }, { onConflict: "endpoint" });
+        if (error) throw new Error("ما انحفظ الاشتراك. جرّب مرة ثانية.");
+        renderNotif(box);
+      } catch (e) { err.textContent = e.message || "صار خطأ."; err.hidden = false; on.disabled = false; }
+    };
+    box.append(on, err);
+    return;
+  }
+
+  const save = async (patch, input) => {
+    input.disabled = true;
+    const { error } = await sb.from("push_subscriptions").update(patch).eq("endpoint", sub.endpoint);
+    input.disabled = false;
+    if (error) { input.checked = !input.checked; }
+    else Object.assign(row, patch);
+  };
+  const toggle = (label, key) => {
+    const l = el("label", "tg"); const i = el("input"); i.type = "checkbox"; i.checked = row[key]; i.id = "n-" + key;
+    i.onchange = () => save({ [key]: i.checked }, i);
+    l.append(el("span", null, label), i); return l;
+  };
+  box.append(toggle("⏰ تذكير قبل المباراة بساعة إذا ما توقعت", "reminders"), toggle("⚽ النتيجة ونقاطك", "results"));
+  box.append(el("p", null, "💬 رسايل جديدة من:"));
+  const grid = el("div", "lgs");
+  for (const c of CHANNELS) {
+    const l = el("label"); const i = el("input"); i.type = "checkbox"; i.id = "n-lg-" + c.id; i.checked = row.leagues.includes(c.id);
+    i.onchange = () => {
+      const next = CHANNELS.map(x => x.id).filter(id => id === c.id ? i.checked : row.leagues.includes(id));
+      save({ leagues: next }, i);
+    };
+    l.append(i, el("span", null, c.flag + " " + c.short)); grid.append(l);
+  }
+  box.append(grid);
+  const off = el("button", "link", "أوقف الإشعارات على هالجهاز"); off.type = "button";
+  off.onclick = async () => {
+    off.disabled = true;
+    await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+    await sub.unsubscribe().catch(() => {});
+    renderNotif(box);
+  };
+  box.append(off);
 }
