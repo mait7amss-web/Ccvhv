@@ -713,15 +713,14 @@ function renderPredictions() {
   const data = matchData[channel] || { matches: [], preds: {} };
   const head = el("div", "pane-head");
   const ht = el("div"); ht.append(el("h2", null, "توقعات الجولة"), el("p", null, "توقّع النتيجة قبل صافرة البداية. التوقعات تنكشف أول ما تبدأ المباراة."));
-  const add = el("button", "add", "+ مباراة"); add.type = "button"; add.onclick = addMatchSheet;
-  head.append(ht, add); box.append(head);
+  head.append(ht); box.append(head);
   if (data.error) { box.append(el("div", "rules", "ما قدرنا نجيب المباريات. تأكد إن تحديث قاعدة البيانات انشغل، وحدّث الصفحة.")); return; }
   const now = Date.now();
   const upcoming = data.matches.filter(m => new Date(m.kickoff) > now).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   const started = data.matches.filter(m => new Date(m.kickoff) <= now);
   if (!data.matches.length) {
     const e = el("div", "empty"); const ico = el("span", "ico", "🏟️"); ico.setAttribute("aria-hidden", "true");
-    e.append(ico, el("strong", null, "ما فيه مباريات"), "أضف مباراة الجولة الجاية من زر + مباراة، وخل الشلة تتوقع.");
+    e.append(ico, el("strong", null, "ما فيه مباريات"), "مباريات الأسبوع الجاي تنضاف هنا تلقائي. ارجع بعد شوي.");
     box.append(e); return;
   }
   if (upcoming.length) { box.append(el("div", "sec", "الجاية")); for (const m of upcoming) box.append(matchCard(m, data.preds[m.id] || [], false)); }
@@ -898,7 +897,7 @@ function renderTable() {
     });
     t.append(tb); wrap.append(t); box.append(wrap);
   }
-  box.append(el("div", "rules", "النقاط: ٣ إذا جبت النتيجة بالضبط، و١ إذا جبت الفايز أو التعادل بس. اللي يضيف المباراة هو اللي يحط نتيجتها."));
+  box.append(el("div", "rules", "النقاط: ٣ إذا جبت النتيجة بالضبط، و١ إذا جبت الفايز أو التعادل بس. النتايج تنحط تلقائي بعد نهاية كل مباراة."));
 }
 
 /* ---------- Push notifications ---------- */
