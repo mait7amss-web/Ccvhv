@@ -21,7 +21,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 6; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 7; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -74,6 +74,10 @@ const byChannel = {};          // channel -> messages[] (ascending)
 const people = {};             // user_id -> { name, team }
 const signed = {};             // image_path -> { url, exp }
 const reacts = {};             // message_id -> [{ user_id, emoji }]
+const blocked = new Set();     // user ids I blocked
+let isAdmin = false;
+const hiddenLocal = new Set((() => { try { return JSON.parse(localStorage.getItem("hala.hidden") || "[]"); } catch { return []; } })());
+function hideLocally(id) { hiddenLocal.add(id); try { localStorage.setItem("hala.hidden", JSON.stringify([...hiddenLocal].slice(-500))); } catch {} }
 const votes = {};              // message_id -> { user_id: option }
 const matchData = {};          // channel -> { matches, preds: { match_id: [prediction] } }
 const seen = new Set();
@@ -109,6 +113,7 @@ function setMode(m) {
   $("tabIn").setAttribute("aria-selected", String(m === "in"));
   $("tabUp").setAttribute("aria-selected", String(m === "up"));
   $("nameField").hidden = m !== "up";
+  $("termsNote").hidden = m !== "up";
   $("emailField").hidden = m === "reset";
   $("passField").hidden = m === "forgot";
   $("passLabel").textContent = m === "reset" ? "كلمة المرور الجديدة" : "كلمة المرور";
@@ -274,11 +279,23 @@ async function startChat() {
   renderLeagues();
   await loadPeople([me.id]);
   renderMe();
+  const [bl, ad] = await Promise.all([
+    sb.from("blocks").select("blocked"),
+    sb.from("admins").select("user_id").eq("user_id", me.id).maybeSingle(),
+  ]);
+  blocked.clear(); for (const b of bl.data || []) blocked.add(b.blocked);
+  isAdmin = Boolean(ad.data);
   realtime?.unsubscribe();
   realtime = sb.channel("hala-live")
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (p) => {
       const m = p.new; const list = byChannel[m.channel];
       if (list && !list.some(x => x.id === m.id)) { list.push(m); reacts[m.id] = []; if (m.poll) votes[m.id] = {}; rerenderIfShown(m.channel); }
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (p) => {
+      const m = findMsg(p.new.id); if (!m) return;
+      m.hidden = p.new.hidden;
+      if (m.hidden && m.user_id !== me.id && !isAdmin) byChannel[m.channel] = byChannel[m.channel].filter(x => x.id !== m.id);
+      rerenderIfShown(m.channel);
     })
     .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (p) => {
       for (const ch in byChannel) byChannel[ch] = byChannel[ch].filter(x => x.id !== p.old.id);
@@ -374,7 +391,7 @@ const kickFmt = new Intl.DateTimeFormat("ar", { weekday: "long", day: "numeric",
 let renderSeq = 0;
 async function render(jump) {
   const seq = ++renderSeq;
-  const msgs = byChannel[channel] || [];
+  const msgs = (byChannel[channel] || []).filter(m => !blocked.has(m.user_id) && !hiddenLocal.has(m.id));
   const ids = msgs.map(m => m.user_id);
   for (const id in reacts) for (const r of reacts[id]) ids.push(r.user_id);
   await Promise.all([
@@ -456,6 +473,15 @@ function messageRow(m, cont) {
       pk.append(x);
     }
     wrap.append(pk);
+    const acts = el("div", "msgacts");
+    const act = (label, fn, cls) => { const x = el("button", cls || "", label); x.type = "button"; x.onclick = (e) => { e.stopPropagation(); pickerFor = null; fn(x); }; acts.append(x); };
+    if (!mine) {
+      act("🚩 تبليغ", () => reportSheet(m));
+      act("🚫 حظر " + nameOf(m.user_id), () => blockSheet(m.user_id));
+    }
+    if (isAdmin && !mine) act("🗑️ احذفها (مشرف)", (x) => deleteMessage(m, x), "danger");
+    if (m.hidden && isAdmin) acts.append(el("span", "hidden-tag", "مخفية عن الناس"));
+    if (acts.childNodes.length) wrap.append(acts);
   }
   row.append(avatarEl(m.user_id), wrap);
   return row;
@@ -545,9 +571,9 @@ $("composer").addEventListener("submit", async (e) => {
   pending.push(tmp); render(true);
   try {
     await insertMessage({ channel: tmp.channel, body });
-  } catch {
+  } catch (err) {
     msgEl.value = body; grow();
-    showErr("ما وصلت الرسالة. تأكد من الاتصال وجرّب مرة ثانية.");
+    showErr(err?.code === "42501" ? "حسابك موقوف عن الكتابة بسبب مخالفة الشروط." : "ما وصلت الرسالة. تأكد من الاتصال وجرّب مرة ثانية.");
   } finally {
     pending.splice(pending.indexOf(tmp), 1); render(false);
   }
@@ -690,8 +716,133 @@ $("meBtn").onclick = () => openSheet("ملفي", (s) => {
   };
   const box = el("div", "notif"); s.append(box);
   renderNotif(box);
-  s.append(out);
+  const safety = el("div", "notif");
+  safety.append(el("h4", null, "🛡️ الخصوصية والأمان"));
+  const links = el("div", "linkrow");
+  if (isAdmin) { const a = el("button", "small pri", "🚩 البلاغات"); a.type = "button"; a.onclick = adminSheet; links.append(a); }
+  const bl = el("button", "small", `المحظورين (${blocked.size})`); bl.type = "button"; bl.onclick = blockedSheet; links.append(bl);
+  const pv = el("a", "small", "الشروط والخصوصية"); pv.href = "privacy.html"; pv.target = "_blank"; pv.rel = "noopener"; links.append(pv);
+  safety.append(links);
+  const delAcc = el("button", "link danger", "حذف حسابي نهائيًا"); delAcc.type = "button"; delAcc.onclick = deleteAccountSheet;
+  safety.append(delAcc);
+  s.append(safety, out);
 });
+
+/* ---------- Report, block, admin, delete account ---------- */
+function toast(text) {
+  const t = el("div", "toast", text); document.body.append(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+function reportSheet(m) {
+  openSheet("تبليغ عن رسالة", (s) => {
+    s.append(el("p", "sheet-p", "ليش تبلّغ عن رسالة " + nameOf(m.user_id) + "؟ بتنخفي الرسالة عندك على طول، والمشرف بيراجعها."));
+    const reasons = ["شتم أو إساءة", "عنصرية أو كراهية", "محتوى غير لائق", "إزعاج أو سبام", "غير ذلك"];
+    const box = el("div", "radios");
+    reasons.forEach((r, i) => {
+      const l = el("label", "tg"); const inp = el("input"); inp.type = "radio"; inp.name = "reason"; inp.value = r; inp.id = "reason" + i; if (!i) inp.checked = true;
+      l.append(el("span", null, r), inp); box.append(l);
+    });
+    s.append(box);
+    sheetActions(s, "أرسل البلاغ", async () => {
+      const reason = s.querySelector("input[name=reason]:checked").value;
+      const { error } = await sb.from("reports").insert({ message_id: m.id, reported_user: m.user_id, reason });
+      if (error && error.code !== "23505") return "ما وصل البلاغ. جرّب مرة ثانية.";
+      hideLocally(m.id); render(false);
+      toast("وصلنا بلاغك، شكرًا. الرسالة انخفت عندك.");
+    });
+  });
+}
+
+function blockSheet(userId) {
+  openSheet("حظر " + nameOf(userId), (s) => {
+    s.append(el("p", "sheet-p", "ما بتشوف رسايله ولا تصويتاته بعد كذا. ما بيوصله إنك حظرته، وتقدر تلغي الحظر من ملفك."));
+    sheetActions(s, "احظره", async () => {
+      const { error } = await sb.from("blocks").insert({ blocked: userId });
+      if (error && error.code !== "23505") return "ما انحفظ الحظر. جرّب مرة ثانية.";
+      blocked.add(userId); render(false);
+      toast("تم حظر " + nameOf(userId) + ".");
+    });
+  });
+}
+
+function blockedSheet() {
+  openSheet("المحظورين", async (s) => {
+    const list = el("div", "preds"); s.append(list);
+    if (!blocked.size) list.append(el("p", "sheet-p", "ما حظرت أحد."));
+    await loadPeople([...blocked]);
+    for (const id of blocked) {
+      const r = el("div", "pr"); const un = el("button", "small", "إلغاء الحظر"); un.type = "button";
+      un.onclick = async () => {
+        un.disabled = true;
+        const { error } = await sb.from("blocks").delete().match({ blocker: me.id, blocked: id });
+        if (error) { un.disabled = false; return; }
+        blocked.delete(id); r.remove(); render(false);
+      };
+      r.append(el("span", "who2", nameOf(id)), un); list.append(r);
+    }
+    const c = el("button", "cancel", "سكّر"); c.type = "button"; c.onclick = closeSheet; s.append(c);
+  });
+}
+
+function deleteAccountSheet() {
+  openSheet("حذف الحساب", (s) => {
+    s.append(el("p", "sheet-p", "بينحذف حسابك وكل رسايلك وصورك وتوقعاتك نهائيًا، وما نقدر نرجعها. عشان تأكد، اكتب كلمة: احذف"));
+    const inp = textInput("delConfirm", 10); inp.placeholder = "احذف"; s.append(inp);
+    sheetActions(s, "احذف حسابي", async () => {
+      if (inp.value.trim() !== "احذف") return "اكتب كلمة: احذف";
+      try {
+        const { data: files } = await sb.storage.from(BUCKET).list(me.id, { limit: 1000 });
+        if (files?.length) await sb.storage.from(BUCKET).remove(files.map(f => `${me.id}/${f.name}`));
+      } catch {}
+      try { const sub = await currentSub(); if (sub) await sub.unsubscribe(); } catch {}
+      const { error } = await sb.rpc("delete_my_account");
+      if (error) return "ما انحذف الحساب. جرّب مرة ثانية.";
+      await sb.auth.signOut().catch(() => {});
+      location.reload();
+    });
+  });
+}
+
+function adminSheet() {
+  openSheet("🚩 البلاغات", async (s) => {
+    const body = el("div", "preds"); s.append(body);
+    body.append(el("p", "sheet-p", "يحمّل…"));
+    const { data, error } = await sb.from("reports")
+      .select("id,message_id,reported_user,reporter,reason,created_at,messages(body,image_path,poll,channel,hidden)")
+      .eq("status", "open").order("created_at", { ascending: false }).limit(200);
+    const { data: bannedRows } = await sb.from("profiles").select("id,name").eq("banned", true);
+    body.textContent = "";
+    if (error) { body.append(el("p", "sheet-p", "ما قدرنا نجيب البلاغات.")); return; }
+    const groups = new Map();
+    for (const r of data) { const g = groups.get(r.message_id) || { ...r, reasons: [], reporters: [] }; g.reasons.push(r.reason); g.reporters.push(r.reporter); groups.set(r.message_id, g); }
+    await loadPeople([...data.flatMap(r => [r.reported_user, r.reporter])]);
+    if (!groups.size) body.append(el("p", "sheet-p", "ما فيه بلاغات مفتوحة 👌"));
+    for (const g of groups.values()) {
+      const card = el("div", "match");
+      const msg = g.messages || {};
+      const txt = msg.poll ? "📊 " + msg.poll.question : msg.body || (msg.image_path ? "📷 صورة" : "—");
+      card.append(el("div", "when", `${nameOf(g.reported_user)} · ${CHANNELS.find(c => c.id === msg.channel)?.short || ""}${msg.hidden ? " · مخفية" : ""}`));
+      card.append(el("div", null, txt));
+      card.append(el("div", "note", `${g.reporters.length} بلاغ: ${[...new Set(g.reasons)].join("، ")}`));
+      const row = el("div", "mrow");
+      const btn = (label, fn, cls) => { const b = el("button", "small " + (cls || ""), label); b.type = "button"; b.onclick = async () => { b.disabled = true; await fn(); adminSheet(); }; row.append(b); };
+      btn("احذف الرسالة", async () => { await sb.from("messages").delete().eq("id", g.message_id); for (const ch in byChannel) byChannel[ch] = byChannel[ch].filter(x => x.id !== g.message_id); }, "pri");
+      btn("أوقف الحساب", () => sb.rpc("set_banned", { target: g.reported_user, ban: true }));
+      btn("ما فيها شي", () => sb.rpc("set_hidden", { msg: g.message_id, hide: false }));
+      card.append(row); body.append(card);
+    }
+    if (bannedRows?.length) {
+      s.append(el("h4", null, "الحسابات الموقوفة"));
+      for (const p of bannedRows) {
+        const r = el("div", "pr"); const un = el("button", "small", "رفع الإيقاف"); un.type = "button";
+        un.onclick = async () => { un.disabled = true; await sb.rpc("set_banned", { target: p.id, ban: false }); r.remove(); };
+        r.append(el("span", "who2", p.name), un); s.append(r);
+      }
+    }
+    const c = el("button", "cancel", "سكّر"); c.type = "button"; c.onclick = () => { closeSheet(); render(false); }; s.append(c);
+  });
+}
 
 /* ---------- Matches & predictions ---------- */
 async function loadMatches(ch) {
