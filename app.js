@@ -666,7 +666,7 @@ $("meBtn").onclick = () => openSheet("ملفي", (s) => {
 /* ---------- Matches & predictions ---------- */
 async function loadMatches(ch) {
   const { data: matches, error } = await sb.from("matches")
-    .select("id,channel,created_by,home,away,kickoff,home_score,away_score")
+    .select("id,channel,created_by,home,away,kickoff,home_score,away_score,status,external_id")
     .eq("channel", ch).order("kickoff", { ascending: false }).limit(150);
   if (error) { matchData[ch] = { matches: [], preds: {}, error: true }; return; }
   const ids = matches.map(m => m.id);
@@ -676,7 +676,7 @@ async function loadMatches(ch) {
   const byMatch = {};
   for (const p of preds || []) (byMatch[p.match_id] ||= []).push(p);
   matchData[ch] = { matches, preds: byMatch };
-  await loadPeople([...matches.map(m => m.created_by), ...(preds || []).map(p => p.user_id)]);
+  await loadPeople([...matches.map(m => m.created_by), ...(preds || []).map(p => p.user_id)].filter(Boolean));
 }
 
 const sign = (n) => Math.sign(n);
@@ -719,7 +719,9 @@ function matchCard(m, preds, started) {
   const done = m.home_score != null && m.away_score != null;
   const when = el("div", "when");
   when.append(el("span", null, kickFmt.format(new Date(m.kickoff))));
-  if (started && !done) when.append(el("span", "live", "● بدأت"));
+  const off = { POSTPONED: "تأجلت", SUSPENDED: "توقفت", CANCELLED: "ألغيت" }[m.status];
+  if (off) when.append(el("span", "live", off));
+  else if (started && !done) when.append(el("span", "live", m.status === "PAUSED" ? "● استراحة" : "● جارية"));
   else if (done) when.append(el("span", null, "انتهت"));
   card.append(when);
 
@@ -778,7 +780,7 @@ function matchCard(m, preds, started) {
     }
     card.append(list);
   }
-  const by = el("div", null, "أضافها " + nameOf(m.created_by));
+  const by = el("div", null, m.created_by ? "أضافها " + nameOf(m.created_by) : "🤖 مباراة رسمية، النتيجة تنحط تلقائي");
   by.style.cssText = "font-size:11px;color:var(--muted)";
   card.append(by);
   return card;
