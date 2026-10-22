@@ -21,7 +21,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 9; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 10; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -40,8 +40,9 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 const EMOJIS = ["👍", "🔥", "😂", "😡"];
 const BUCKET = "chat-images";
 const AUDIO_BUCKET = "chat-audio";
-// Built-in sticker pack: [id, label]
-const STICKERS = [["goal","هدددف!"],["offside","تسلل!"],["var","راجع الفار"],["red","كرت أحمر"],["yellow","إنذار!"],["wow","يا ساتر!"],["fire","نااار"],["remontada","ريمونتادا"],["ref","وين الحكم؟"],["champ","الأبطال"],["sleep","الدفاع نايم"],["penalty","بلنتي!"],["lol","ههههه"],["gg","كفو!"]];
+// Built-in sticker pack: [id, label]. Older sticker files stay in /stickers so past messages still show.
+const STICKERS = [["goal","هدددف!"],["gg","كفو!"],["champ","الأبطال"],["shh","اسكتوا!"],["miss","ضيّعها!"],["cry","يا حسرة"],["foul","وين الفاول؟"],["dive","تمثيل!"],["save","صدّة!"],["bicycle","مقصية!"],["sleep","الدفاع نايم"],["red","طرد!"],["offside","تسلل!"],["var","راجع الفار"]];
+const OLD_STICKERS = { yellow: "إنذار!", wow: "يا ساتر!", fire: "نااار", remontada: "ريمونتادا", ref: "وين الحكم؟", penalty: "بلنتي!", lol: "ههههه" };
 const PAGE = 200;
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -434,7 +435,7 @@ function snippet(m) {
   if (m.poll) return "📊 " + m.poll.question;
   if (m.image_path || m.localUrl) return "📷 صورة";
   if (m.gif_url) return "GIF";
-  if (m.sticker) return "ملصق " + (STICKERS.find(s => s[0] === m.sticker)?.[1] || "");
+  if (m.sticker) return "ملصق " + (STICKERS.find(s => s[0] === m.sticker)?.[1] || OLD_STICKERS[m.sticker] || "");
   if (m.audio_path || m.localAudio) return "🎤 رسالة صوتية " + fmtSecs(m.audio_secs || 0);
   return "";
 }
@@ -494,7 +495,7 @@ function messageRow(m, cont) {
     b.append(q);
   }
   if (m.sticker) {
-    const st = el("img", "sticker"); st.src = `stickers/${m.sticker}.webp`; st.alt = STICKERS.find(s => s[0] === m.sticker)?.[1] || "ملصق";
+    const st = el("img", "sticker"); st.src = `stickers/${m.sticker}.webp`; st.alt = STICKERS.find(s => s[0] === m.sticker)?.[1] || OLD_STICKERS[m.sticker] || "ملصق";
     b.append(st);
   }
   if (m.gif_url) {
