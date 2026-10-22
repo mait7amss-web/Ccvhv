@@ -100,6 +100,7 @@ input[type="text"], input[type="email"], input[type="password"] {
 }
 .primary { border: 0; border-radius: 12px; padding: 12px; background: var(--mine); color: var(--mine-ink); font-weight: 600; font-size: 15px; cursor: pointer; }
 .primary:disabled { opacity: .6; cursor: default; }
+.link { align-self: center; border: 0; background: none; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 13.5px; padding: 4px; }
 .ok { color: var(--mine); font-size: 13.5px; line-height: 1.6; }
 code { background: var(--chip); padding: 1px 6px; border-radius: 6px; direction: ltr; unicode-bidi: embed; }
 
@@ -126,24 +127,26 @@ code { background: var(--chip); padding: 1px 6px; border-radius: 6px; direction:
 <section class="screen" id="authScreen" hidden>
   <form class="card wrap" id="authForm" novalidate>
     <div class="logo" aria-hidden="true">ه</div>
-    <h2>هلا وغلا</h2>
-    <p>دردشة للشلة. سجّل دخولك أو سوّ حساب جديد.</p>
-    <div class="tabs" role="tablist">
+    <h2 id="authTitle">هلا وغلا</h2>
+    <p id="authLead">دردشة للشلة. سجّل دخولك أو سوّ حساب جديد.</p>
+    <div class="tabs" role="tablist" id="authTabs">
       <button type="button" role="tab" id="tabIn" aria-selected="true">دخول</button>
       <button type="button" role="tab" id="tabUp" aria-selected="false">حساب جديد</button>
     </div>
     <label id="nameField" hidden>اسمك اللي يظهر للناس
       <input type="text" id="nameInput" maxlength="40" autocomplete="nickname">
     </label>
-    <label>الإيميل
+    <label id="emailField">الإيميل
       <input type="email" id="emailInput" autocomplete="email" dir="ltr" required>
     </label>
-    <label>كلمة المرور
+    <label id="passField"><span id="passLabel">كلمة المرور</span>
       <input type="password" id="passInput" autocomplete="current-password" dir="ltr" minlength="6" required>
     </label>
     <button class="primary" id="authBtn" type="submit">دخول</button>
     <div class="err" id="authErr" hidden></div>
     <div class="ok" id="authOk" hidden></div>
+    <button class="link" id="forgotBtn" type="button">نسيت كلمة المرور؟</button>
+    <button class="link" id="backBtn" type="button" hidden>رجوع لتسجيل الدخول</button>
   </form>
 </section>
 
@@ -194,6 +197,10 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey || !window.supabase) {
   $("setupScreen").hidden = false;
   throw new Error("Hala: missing Supabase config");
 }
+// Read before the client clears the link details from the address bar.
+const linkInfo = new URLSearchParams((location.hash || "").slice(1) + "&" + location.search.slice(1));
+let recovering = linkInfo.get("type") === "recovery";
+const linkError = linkInfo.get("error_code");
 const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
 
 let me = null;                 // auth user
@@ -214,15 +221,33 @@ function show(view) {
 
 /* ---------- Auth ---------- */
 let mode = "in";
+// Modes: in (sign in), up (sign up), forgot (ask for reset email), reset (set new password)
+const MODE_TEXT = {
+  in:     { title: "هلا وغلا", lead: "دردشة للشلة. سجّل دخولك أو سوّ حساب جديد.", btn: "دخول" },
+  up:     { title: "هلا وغلا", lead: "دردشة للشلة. سجّل دخولك أو سوّ حساب جديد.", btn: "سوّ الحساب" },
+  forgot: { title: "نسيت كلمة المرور؟", lead: "اكتب إيميلك ونرسل لك رابط تختار فيه كلمة مرور جديدة.", btn: "أرسل الرابط" },
+  reset:  { title: "كلمة مرور جديدة", lead: "اختر كلمة مرور جديدة لحسابك.", btn: "احفظ كلمة المرور" },
+};
 function setMode(m) {
   mode = m;
+  const t = MODE_TEXT[m];
+  $("authTitle").textContent = t.title;
+  $("authLead").textContent = t.lead;
+  $("authBtn").textContent = t.btn;
+  $("authTabs").hidden = m === "forgot" || m === "reset";
   $("tabIn").setAttribute("aria-selected", String(m === "in"));
   $("tabUp").setAttribute("aria-selected", String(m === "up"));
   $("nameField").hidden = m !== "up";
-  $("authBtn").textContent = m === "in" ? "دخول" : "سوّ الحساب";
+  $("emailField").hidden = m === "reset";
+  $("passField").hidden = m === "forgot";
+  $("passLabel").textContent = m === "reset" ? "كلمة المرور الجديدة" : "كلمة المرور";
   $("passInput").autocomplete = m === "in" ? "current-password" : "new-password";
+  $("forgotBtn").hidden = m !== "in";
+  $("backBtn").hidden = m !== "forgot";
   authMsg("", "");
 }
+$("forgotBtn").onclick = () => setMode("forgot");
+$("backBtn").onclick = () => setMode("in");
 $("tabIn").onclick = () => setMode("in");
 $("tabUp").onclick = () => setMode("up");
 function authMsg(err, ok) {
@@ -234,6 +259,8 @@ function authError(e) {
   if (m.includes("invalid login")) return "الإيميل أو كلمة المرور غلط.";
   if (m.includes("not confirmed")) return "لازم تأكد إيميلك أول. شوف بريدك واضغط رابط التأكيد.";
   if (m.includes("already registered")) return "هالإيميل مسجل من قبل. جرّب تسجيل الدخول.";
+  if (m.includes("different from the old")) return "اختر كلمة مرور غير القديمة.";
+  if (m.includes("session") || m.includes("expired")) return "انتهت صلاحية الرابط. اطلب رابط جديد من \"نسيت كلمة المرور؟\".";
   if (m.includes("password")) return "كلمة المرور لازم تكون ٦ أحرف أو أكثر.";
   if (m.includes("rate")) return "محاولات كثيرة. انتظر شوي وجرّب.";
   return "صار خطأ: " + (e && e.message || "غير معروف");
@@ -243,11 +270,23 @@ $("authForm").addEventListener("submit", async (e) => {
   const email = $("emailInput").value.trim();
   const password = $("passInput").value;
   const name = $("nameInput").value.trim();
-  if (!email || !password) return authMsg("اكتب الإيميل وكلمة المرور.", "");
+  if (mode === "forgot" && !email) return authMsg("اكتب إيميلك.", "");
+  if (mode === "reset" && password.length < 6) return authMsg("كلمة المرور لازم تكون ٦ أحرف أو أكثر.", "");
+  if ((mode === "in" || mode === "up") && (!email || !password)) return authMsg("اكتب الإيميل وكلمة المرور.", "");
   if (mode === "up" && !name) return authMsg("اكتب اسمك.", "");
   $("authBtn").disabled = true; authMsg("", "");
   try {
-    if (mode === "in") {
+    if (mode === "forgot") {
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+      if (error) throw error;
+      authMsg("", "إذا الإيميل مسجل عندنا، بيوصلك رابط خلال دقايق. افتحه من نفس الجوال واختر كلمة مرور جديدة. شيّك على الـ Spam إذا ما لقيته.");
+    } else if (mode === "reset") {
+      const { error } = await sb.auth.updateUser({ password });
+      if (error) throw error;
+      recovering = false;
+      $("passInput").value = "";
+      startChat();
+    } else if (mode === "in") {
       const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
     } else {
@@ -267,13 +306,23 @@ $("authForm").addEventListener("submit", async (e) => {
 $("signOutBtn").onclick = () => sb.auth.signOut();
 
 let booted = false;
-sb.auth.onAuthStateChange((_event, session) => {
+sb.auth.onAuthStateChange((event, session) => {
   const u = session?.user || null;
+  if (event === "PASSWORD_RECOVERY") recovering = true;
+  if (recovering && u) {
+    me = u; booted = true;
+    setTimeout(() => { show("auth"); if (mode !== "reset") setMode("reset"); }, 0);
+    return;
+  }
   if (booted && u?.id === me?.id) return;
   booted = true;
   me = u;
   // run outside the auth callback so Supabase calls inside don't deadlock
-  setTimeout(() => { if (me) startChat(); else stopChat(); }, 0);
+  setTimeout(() => {
+    if (me) return startChat();
+    stopChat();
+    if (linkError === "otp_expired") { setMode("forgot"); authMsg("انتهت صلاحية الرابط. اكتب إيميلك ونرسل لك رابط جديد.", ""); }
+  }, 0);
 });
 
 /* ---------- Data ---------- */
