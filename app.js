@@ -21,6 +21,22 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
+const APP_VERSION = 6; // keep in sync with version.json and the ?v= in index.html
+
+// When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
+async function checkForUpdate() {
+  try {
+    const r = await fetch("version.json?t=" + Date.now(), { cache: "no-store" });
+    const { v } = await r.json();
+    if (v > APP_VERSION && sessionStorage.getItem("hala.reloadedFor") !== String(v)) {
+      sessionStorage.setItem("hala.reloadedFor", String(v));
+      location.reload();
+    }
+  } catch {}
+}
+checkForUpdate();
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
+
 const EMOJIS = ["👍", "🔥", "😂", "😡"];
 const BUCKET = "chat-images";
 const PAGE = 200;
