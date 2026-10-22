@@ -40,6 +40,7 @@ Deno.serve(async (req) => {
 
   const input = await req.json().catch(() => ({}));
   if (input.event_id) return crowdEvent(input.event_id);
+  if (input.arena_id) return arenaStart(input.arena_id);
   const id = input.id;
   if (!id) return new Response("bad request", { status: 400 });
 
@@ -131,4 +132,27 @@ async function crowdEvent(eventId: number) {
   }));
   if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
   return new Response(`crowd sent ${(subs || []).length - dead.length}`, { status: 200 });
+}
+
+// A structured debate filled its six seats: tell the debaters it starts in two minutes.
+async function arenaStart(arenaId: number) {
+  const { data: a } = await sb.from("arenas").select("id,channel,topic").eq("id", arenaId).maybeSingle();
+  if (!a) return new Response("gone", { status: 200 });
+  const { data: seats } = await sb.from("arena_seats").select("user_id").eq("arena_id", a.id);
+  const users = (seats || []).map((s) => s.user_id);
+  if (!users.length) return new Response("no one", { status: 200 });
+  const { data: subs } = await sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").in("user_id", users);
+  const payload = JSON.stringify({
+    title: "🎙️ النقاش المنظم يبدأ بعد دقيقتين!",
+    body: `${a.topic} · اكتملت المقاعد، ادخل وجهّز كلمتك`,
+    url: `./?league=${a.channel}&view=arena&arena=${a.id}`,
+    tag: `arena-${a.id}`,
+  });
+  const dead: string[] = [];
+  await Promise.all((subs || []).map(async (s) => {
+    try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 120 }); }
+    catch (e) { const c = (e as { statusCode?: number }).statusCode; if (c === 404 || c === 410) dead.push(s.endpoint); }
+  }));
+  if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
+  return new Response(`arena sent ${(subs || []).length - dead.length}`, { status: 200 });
 }
