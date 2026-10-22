@@ -1,0 +1,340 @@
+<title>هلا</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@500;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen chat — header, channel chips, scrolling thread, composer pinned at bottom. RTL. */
+:root {
+  --bg: #eef3f1;
+  --panel: #ffffff;
+  --ink: #12302b;
+  --muted: #5d746f;
+  --line: #d5e1dd;
+  --mine: #0f5e52;
+  --mine-ink: #f2fbf8;
+  --theirs: #ffffff;
+  --accent: #d98e2b;
+  --chip: #e1ebe8;
+  --display: "Readex Pro", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --body: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1816; --panel: #12221f; --ink: #e3efec; --muted: #8ea6a0; --line: #21362f;
+    --mine: #1f8a78; --mine-ink: #f2fbf8; --theirs: #182c28; --accent: #f0a845; --chip: #1a2f2b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1816; --panel: #12221f; --ink: #e3efec; --muted: #8ea6a0; --line: #21362f;
+  --mine: #1f8a78; --mine-ink: #f2fbf8; --theirs: #182c28; --accent: #f0a845; --chip: #1a2f2b;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px;
+  direction: rtl; display: flex; flex-direction: column; overflow: hidden;
+}
+.wrap {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  max-width: 760px; width: 100%; margin-inline: auto; box-sizing: border-box;
+}
+header { background: var(--panel); border-bottom: 1px solid var(--line); flex: none; }
+header .wrap { padding-block: 12px; display: flex; align-items: center; gap: 12px; }
+.logo {
+  width: 40px; height: 40px; border-radius: 12px; background: var(--mine); color: var(--mine-ink);
+  display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 18px; flex: none;
+}
+.brand { min-width: 0; flex: 1; }
+.brand h1 { margin: 0; font-family: var(--display); font-size: 20px; line-height: 1.1; }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+.status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex: none; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.dot.live { background: #2fb67c; }
+.chips .wrap { padding-block: 10px; display: flex; gap: 8px; overflow-x: auto; }
+.chip {
+  font: 500 13.5px var(--body); border: 0; border-radius: 999px; padding: 6px 14px; cursor: pointer;
+  background: var(--chip); color: var(--ink); white-space: nowrap;
+}
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.chip:focus-visible, button:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+main { flex: 1; overflow-y: auto; min-height: 0; }
+main .wrap { padding-block: 12px 20px; display: flex; flex-direction: column; gap: 6px; }
+.day { align-self: center; font-size: 12px; color: var(--muted); background: var(--chip); padding: 3px 10px; border-radius: 999px; margin-block: 8px; }
+.row { display: flex; gap: 8px; align-items: flex-end; max-width: 82%; }
+.row.mine { align-self: flex-start; flex-direction: row; }
+.row.theirs { align-self: flex-end; flex-direction: row-reverse; }
+.row img { width: 28px; height: 28px; border-radius: 50%; flex: none; }
+.row.mine img, .row.cont img { visibility: hidden; }
+.bubble {
+  min-width: 0; padding: 8px 12px 6px; border-radius: 16px; line-height: 1.55;
+  background: var(--theirs); border: 1px solid var(--line); overflow-wrap: anywhere; white-space: pre-wrap;
+}
+.mine .bubble { background: var(--mine); color: var(--mine-ink); border-color: transparent; border-bottom-left-radius: 4px; }
+.theirs .bubble { border-bottom-right-radius: 4px; }
+.who { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.meta { font-size: 11px; opacity: .7; margin-top: 2px; text-align: left; font-variant-numeric: tabular-nums; }
+.empty { text-align: center; color: var(--muted); padding-block: 48px; line-height: 1.7; }
+.empty strong { display: block; font-family: var(--display); color: var(--ink); font-size: 18px; }
+.note { align-self: center; font-size: 12px; color: var(--muted); text-align: center; }
+footer { background: var(--panel); border-top: 1px solid var(--line); flex: none; }
+footer .wrap { padding-block: 10px; }
+form { display: flex; gap: 8px; align-items: flex-end; }
+textarea {
+  flex: 1; min-width: 0; resize: none; font: 15px/1.5 var(--body); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 20px; padding: 9px 14px; max-height: 120px;
+}
+.send {
+  flex: none; width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--accent); color: #1b1305; display: grid; place-items: center;
+}
+.send:disabled { opacity: .45; cursor: default; }
+.send svg { width: 20px; height: 20px; transform: scaleX(-1); }
+.attach {
+  flex: none; width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); cursor: pointer;
+  background: var(--bg); color: var(--muted); display: grid; place-items: center;
+}
+.attach svg { width: 22px; height: 22px; }
+.attach:disabled { opacity: .45; cursor: default; }
+.pic { display: block; max-width: min(260px, 100%); max-height: 320px; border-radius: 10px; margin-block: 2px 4px; cursor: zoom-in; background: var(--chip); }
+.pic.broken { min-width: 160px; min-height: 90px; }
+.viewer { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.88); display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); cursor: zoom-out; }
+.viewer img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+.err { color: #c2412d; font-size: 12.5px; margin-top: 6px; }
+@media (prefers-reduced-motion: no-preference) {
+  .row.fresh { animation: pop .18s ease-out; }
+  @keyframes pop { from { transform: translateY(6px); opacity: .4; } }
+}
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="logo" aria-hidden="true">ه</div>
+    <div class="brand">
+      <h1>هلا</h1>
+      <p id="sub">دردشة جماعية لكل من يفتح الصفحة</p>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">يتصل…</span></div>
+  </div>
+  <nav class="chips" aria-label="القنوات"><div class="wrap" id="chips"></div></nav>
+</header>
+
+<main id="scroller"><div class="wrap" id="thread"></div></main>
+
+<footer>
+  <div class="wrap">
+    <form id="composer">
+      <input type="file" id="picker" accept="image/*" hidden>
+      <button class="attach" id="attachBtn" type="button" aria-label="إرفاق صورة" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>
+      </button>
+      <textarea id="msg" rows="1" maxlength="2000" placeholder="اكتب رسالة…" aria-label="الرسالة"></textarea>
+      <button class="send" id="sendBtn" type="submit" aria-label="إرسال" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg>
+      </button>
+    </form>
+    <div class="err" id="err" hidden></div>
+  </div>
+</footer>
+<div class="viewer" id="viewer" hidden><img id="viewerImg" alt=""></div>
+
+<script>
+const CHANNELS = [
+  { id: "general", name: "# عام" },
+  { id: "friends", name: "# الشلة" },
+  { id: "work", name: "# الشغل" },
+];
+const $ = (id) => document.getElementById(id);
+let channel = "general";
+try { channel = localStorage.getItem("hala.channel") || "general"; } catch {}
+if (!CHANNELS.some(c => c.id === channel)) channel = "general";
+
+let db = null, user = null, assets = null, myId = null, allDocs = [], demo = false, seen = new Set();
+
+// Shown only when the shared store can't be reached (e.g. a preview).
+const DEMO = [
+  { id: "d1", uid: "demo-a", text: "هلا والله! هذي رسائل تجريبية للعرض فقط.", ts: Date.now() - 600000, channel: "general" },
+  { id: "d2", uid: "demo-b", text: "افتح الصفحة من claude.ai وسجّل دخولك عشان تشوف الرسائل الحقيقية.", ts: Date.now() - 540000, channel: "general" },
+];
+
+function renderChips() {
+  const box = $("chips"); box.textContent = "";
+  for (const c of CHANNELS) {
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = c.name; b.id = "ch-" + c.id;
+    b.setAttribute("aria-pressed", String(c.id === channel));
+    b.onclick = () => { channel = c.id; try { localStorage.setItem("hala.channel", c.id); } catch {} renderChips(); render(true); };
+    box.append(b);
+  }
+}
+
+const timeFmt = new Intl.DateTimeFormat("ar", { hour: "numeric", minute: "2-digit" });
+const dayFmt = new Intl.DateTimeFormat("ar", { weekday: "long", day: "numeric", month: "long" });
+
+async function render(jump) {
+  const sc = $("scroller");
+  const nearBottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 120;
+  const msgs = allDocs.filter(m => m.channel === channel).sort((a, b) => a.ts - b.ts);
+  const ids = [...new Set(msgs.map(m => m.uid))];
+  let ps = {};
+  if (user && ids.length) { try { ps = await user.profiles(ids); } catch {} }
+  const t = $("thread"); t.textContent = "";
+  if (demo) {
+    const n = document.createElement("div"); n.className = "note";
+    n.textContent = "وضع تجريبي: الرسائل هنا محلية ولا تصل لأحد.";
+    t.append(n);
+  }
+  if (!msgs.length) {
+    const e = document.createElement("div"); e.className = "empty";
+    const s = document.createElement("strong"); s.textContent = "القناة فاضية";
+    e.append(s, "اكتب أول رسالة تحت، وتوصل لكل من يفتح الصفحة.");
+    t.append(e);
+  }
+  let lastDay = "", lastUid = null;
+  for (const m of msgs) {
+    const d = dayFmt.format(m.ts);
+    if (d !== lastDay) {
+      const el = document.createElement("div"); el.className = "day"; el.textContent = d; t.append(el);
+      lastDay = d; lastUid = null;
+    }
+    const mine = m.uid === myId;
+    const row = document.createElement("div");
+    row.className = "row " + (mine ? "mine" : "theirs") + (m.uid === lastUid ? " cont" : "") + (seen.has(m.id) ? "" : " fresh");
+    seen.add(m.id);
+    const p = ps[m.uid];
+    const img = document.createElement("img"); img.alt = "";
+    img.src = p?.avatarUrl || "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28"><circle cx="14" cy="14" r="14" fill="#8ea6a0"/></svg>');
+    const b = document.createElement("div"); b.className = "bubble";
+    if (!mine && m.uid !== lastUid) {
+      const w = document.createElement("div"); w.className = "who";
+      w.textContent = p?.name || (m.uid.startsWith("demo") ? "مثال" : "شخص");
+      if (p?.color) w.style.color = p.color;
+      b.append(w);
+    }
+    if (m.image || m.localUrl) {
+      const pic = document.createElement("img"); pic.className = "pic"; pic.alt = "صورة";
+      pic.src = m.localUrl || ("/_blob/" + encodeURIComponent(m.image));
+      pic.onerror = () => { pic.classList.add("broken"); pic.alt = "الصورة غير متاحة"; };
+      pic.onclick = () => { $("viewerImg").src = pic.src; $("viewer").hidden = false; };
+      b.append(pic);
+    }
+    if (m.text) { const tx = document.createElement("div"); tx.textContent = m.text; b.append(tx); }
+    const meta = document.createElement("div"); meta.className = "meta";
+    meta.textContent = m.pending ? "يُرسل…" : timeFmt.format(m.ts);
+    b.append(meta);
+    row.append(img, b);
+    t.append(row);
+    lastUid = m.uid;
+  }
+  if (jump || nearBottom) sc.scrollTop = sc.scrollHeight;
+}
+
+function setStatus(live, text) {
+  $("dot").classList.toggle("live", live);
+  $("statusText").textContent = text;
+}
+
+function showErr(text) { const e = $("err"); e.textContent = text; e.hidden = !text; }
+
+const msgEl = $("msg"), sendBtn = $("sendBtn");
+function grow() {
+  msgEl.style.height = "auto"; msgEl.style.height = Math.min(msgEl.scrollHeight, 120) + "px";
+  sendBtn.disabled = !msgEl.value.trim();
+}
+msgEl.addEventListener("input", grow);
+msgEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("composer").requestSubmit(); }
+});
+
+$("composer").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = msgEl.value.trim();
+  if (!text) return;
+  msgEl.value = ""; grow(); showErr("");
+  const body = { uid: myId || "me", text, ts: Date.now(), channel };
+  if (demo || !db) {
+    allDocs.push({ id: "l" + Date.now(), ...body }); render(true); return;
+  }
+  try {
+    await db.collection("messages").add(body);
+  } catch (err) {
+    msgEl.value = text; grow();
+    if (err?.code === "quota_exceeded") showErr("امتلأت مساحة الرسائل. اطلب من صاحب الصفحة يمسح الرسائل القديمة.");
+    else if (err?.code === "permission_denied") showErr("ما عندك صلاحية الكتابة هنا. اطلب من صاحب الصفحة صلاحية مشارك.");
+    else showErr("ما وصلت الرسالة. تأكد من الاتصال وجرّب مرة ثانية.");
+  }
+});
+
+$("viewer").onclick = () => { $("viewer").hidden = true; };
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("viewer").hidden = true; });
+$("attachBtn").onclick = () => $("picker").click();
+
+// Shrink big gallery photos before upload so they load fast and save space.
+async function shrink(file) {
+  if (file.type === "image/gif" || file.type === "image/svg+xml") return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    const max = 1600, k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    if (k === 1 && file.size < 1.5e6) return file;
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    return await new Promise((r) => c.toBlob((b) => r(b || file), "image/jpeg", 0.85));
+  } catch { return file; }
+}
+
+$("picker").addEventListener("change", async () => {
+  const file = $("picker").files[0];
+  $("picker").value = "";
+  if (!file) return;
+  if (!file.type.startsWith("image/")) { showErr("اختر صورة فقط."); return; }
+  showErr("");
+  const caption = msgEl.value.trim();
+  msgEl.value = ""; grow();
+  const localUrl = URL.createObjectURL(file);
+  const tmp = { id: "up" + Date.now(), uid: myId || "me", text: caption, ts: Date.now(), channel, localUrl, pending: true };
+  allDocs.push(tmp); render(true);
+  if (demo || !assets || !db) { tmp.pending = false; render(false); return; }
+  $("attachBtn").disabled = true;
+  try {
+    const up = await assets.upload(await shrink(file));
+    await db.collection("messages").add({ uid: myId, text: caption, image: up.id, ts: Date.now(), channel });
+    allDocs = allDocs.filter((m) => m !== tmp);
+    render(false);
+  } catch (err) {
+    allDocs = allDocs.filter((m) => m !== tmp); render(false);
+    msgEl.value = caption; grow();
+    const c = err?.code;
+    if (c === "too_large" || c === "payload_too_large") showErr("الصورة كبيرة مرة. جرّب صورة أصغر.");
+    else if (c === "quota_exceeded") showErr("امتلأت مساحة الصور. اطلب من صاحب الصفحة يمسح القديم.");
+    else if (c === "unsupported_type") showErr("نوع الصورة هذا غير مدعوم. جرّب JPG أو PNG.");
+    else if (c === "not_granted" || c === "permission_denied") showErr("ما عندك صلاحية رفع الصور هنا.");
+    else showErr("ما انرفعت الصورة. تأكد من الاتصال وجرّب مرة ثانية.");
+  } finally {
+    $("attachBtn").disabled = false;
+  }
+});
+
+function startDemo() {
+  demo = true; myId = myId || "me"; allDocs = DEMO.slice(); $("attachBtn").hidden = false;
+  setStatus(false, "تجريبي"); render(true);
+}
+
+renderChips();
+render(true);
+
+(async () => {
+  if (!window.claude?.use) { startDemo(); return; }
+  [db, user, assets] = await Promise.all([claude.use("db"), claude.use("user"), claude.use("assets")]);
+  $("attachBtn").hidden = !assets;
+  if (user) { try { myId = await user.id(); } catch {} }
+  if (!db || !myId) { startDemo(); return; }
+  setStatus(true, "متصل");
+  db.collection("messages").orderBy("ts", "desc").limit(400).onSnapshot((snap) => {
+    const uploading = allDocs.filter(m => m.localUrl && m.pending);
+    allDocs = snap.docs.map(d => ({ id: d.id, ...d.data(), pending: d.metadata.hasPendingWrites })).concat(uploading);
+    render(false);
+  }, () => setStatus(false, "انقطع الاتصال"));
+})();
+</script>
