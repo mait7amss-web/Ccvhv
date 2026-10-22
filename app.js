@@ -8,6 +8,7 @@ const CHANNELS = [
   { id: "seriea",     short: "إيطالي",  flag: "🇮🇹", name: "الدوري الإيطالي",          color: "#1aa3ff", ink: "#04131f" },
   { id: "bundesliga", short: "ألماني",  flag: "🇩🇪", name: "الدوري الألماني",          color: "#e4202b", ink: "#ffffff" },
   { id: "ligue1",     short: "فرنسي",   flag: "🇫🇷", name: "الدوري الفرنسي",           color: "#dae025", ink: "#0d1400" },
+  { id: "ucl",        short: "الأبطال", flag: "🏆", name: "دوري أبطال أوروبا",        color: "#c9d6ec", ink: "#0b1f6b" },
 ];
 
 // Favorite-team choices: [id, Arabic name, club color]
@@ -21,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 12; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 13; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -785,6 +786,7 @@ $("meBtn").onclick = () => openSheet("ملفي", (s) => {
   const sel = el("select"); sel.id = "profTeam";
   sel.append(new Option("بدون فريق", ""));
   for (const c of CHANNELS) {
+    if (!TEAMS[c.id]?.length) continue;
     const g = document.createElement("optgroup"); g.label = c.flag + " " + c.name;
     for (const [id, name] of TEAMS[c.id]) g.append(new Option(name, id));
     sel.append(g);

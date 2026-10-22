@@ -9,7 +9,7 @@ import { AR, FAV_TO_FD } from "./teams.mjs";
 const { API_FOOTBALL_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
 if (!API_FOOTBALL_KEY) { console.log("No API_FOOTBALL_KEY, skipping lineups"); process.exit(0); }
 
-const LEAGUE_ID = { epl: 39, laliga: 140, seriea: 135, bundesliga: 78, ligue1: 61 };
+const LEAGUE_ID = { epl: 39, laliga: 140, seriea: 135, bundesliga: 78, ligue1: 61, ucl: 2 };
 const H = 3600000, now = Date.now();
 
 const sbHeaders = { apikey: SUPABASE_SERVICE_KEY, "Content-Type": "application/json" };

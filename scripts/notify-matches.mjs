@@ -19,7 +19,7 @@ async function api(path, opts = {}) {
 }
 const inList = (xs) => encodeURIComponent(`(${xs.map((x) => `"${x}"`).join(",")})`);
 
-const LEAGUES = { epl: "الإنجليزي", laliga: "الإسباني", seriea: "الإيطالي", bundesliga: "الألماني", ligue1: "الفرنسي" };
+const LEAGUES = { epl: "الإنجليزي", laliga: "الإسباني", seriea: "الإيطالي", bundesliga: "الألماني", ligue1: "الفرنسي", ucl: "دوري الأبطال" };
 
 // ---------- VAPID keys (created once, stored in the database) ----------
 let pub = (await api("app_public?key=eq.vapid_public&select=value"))[0]?.value;
@@ -64,7 +64,7 @@ for (const u of users) {
     const to = mine.filter((s) => s.reminders);
     if (to.length) jobs.push({ m, u, kind: "remind", to, payload: {
       title: `⏰ ${m.home} × ${m.away}`,
-      body: `تبدأ خلال ساعة في الدوري ${LEAGUES[m.channel]}، وللحين ما توقعت!`,
+      body: `تبدأ خلال ساعة في ${m.channel === "ucl" ? "" : "الدوري "}${LEAGUES[m.channel]}، وللحين ما توقعت!`,
       url: `./?league=${m.channel}&view=pred`, tag: `remind-${m.id}`,
     } });
   }

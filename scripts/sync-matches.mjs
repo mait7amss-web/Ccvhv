@@ -13,7 +13,7 @@ for (const [k, v] of Object.entries({ FOOTBALL_DATA_TOKEN, SUPABASE_URL, SUPABAS
 }
 
 // football-data.org competition code -> app channel id
-const COMPETITIONS = { PL: "epl", PD: "laliga", SA: "seriea", BL1: "bundesliga", FL1: "ligue1" };
+const COMPETITIONS = { PL: "epl", PD: "laliga", SA: "seriea", BL1: "bundesliga", FL1: "ligue1", CL: "ucl" };
 const DAYS_BACK = 3;   // catch late results
 const DAYS_AHEAD = 7;  // free tier allows a 10-day window per request
 

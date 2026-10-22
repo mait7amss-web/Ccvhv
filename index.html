@@ -41,6 +41,7 @@ body[data-league="laliga"]     { --league: #ff4b3e; --league-ink: #ffffff; }
 body[data-league="seriea"]     { --league: #1aa3ff; --league-ink: #04131f; }
 body[data-league="bundesliga"] { --league: #e4202b; --league-ink: #ffffff; }
 body[data-league="ligue1"]     { --league: #dae025; --league-ink: #0d1400; }
+body[data-league="ucl"]        { --league: #c9d6ec; --league-ink: #0b1f6b; }
 
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -72,14 +73,14 @@ header { background: var(--pitch-2); border-bottom: 1px solid var(--line); flex:
 .ghost { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer; flex: none; }
 
 /* League tabs: five equal cells, like a scoreboard row */
-.leagues { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; padding-block: 0 10px; }
+.leagues { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; padding-block: 0 10px; }
 .lg {
   border: 1px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer;
   border-radius: 12px; padding: 8px 2px 7px; display: flex; flex-direction: column; align-items: center; gap: 3px;
   position: relative; overflow: hidden; min-width: 0;
 }
 .lg .flag { font-size: 20px; line-height: 1; }
-.lg .nm { font-size: 12px; font-weight: 700; white-space: nowrap; }
+.lg .nm { font-size: 11.5px; font-weight: 700; white-space: nowrap; }
 .lg::after { content: ""; position: absolute; inset: auto 0 0; height: 3px; background: var(--c); opacity: .35; }
 .lg[aria-pressed="true"] { background: var(--c); border-color: var(--c); color: var(--ci); }
 .lg[aria-pressed="true"]::after { opacity: 0; }
@@ -558,8 +559,8 @@ svg.pitch .pl { cursor: grab; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=12"></script>
-<script src="tactics.js?v=12"></script>
-<script src="live.js?v=12"></script>
+<script src="app.js?v=13"></script>
+<script src="tactics.js?v=13"></script>
+<script src="live.js?v=13"></script>
 </body>
 </html>

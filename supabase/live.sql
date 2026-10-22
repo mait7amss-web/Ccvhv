@@ -1,6 +1,14 @@
 -- مدرج هلا: وضع المباراة المباشر + الستريك والمستويات
 -- شغّله مرة وحدة في Supabase > SQL Editor. آمن لو انشغل أكثر من مرة.
 
+-- دوري أبطال أوروبا كخانة سادسة
+alter table public.messages drop constraint if exists messages_channel_check;
+alter table public.messages add constraint messages_channel_check
+  check (channel in ('epl', 'laliga', 'seriea', 'bundesliga', 'ligue1', 'ucl')) not valid;
+alter table public.matches drop constraint if exists matches_channel_check;
+alter table public.matches add constraint matches_channel_check
+  check (channel in ('epl', 'laliga', 'seriea', 'bundesliga', 'ligue1', 'ucl')) not valid;
+
 -- رسائل غرفة المباراة
 alter table public.messages add column if not exists match_id bigint references public.matches (id) on delete set null;
 create index if not exists messages_match_idx on public.messages (match_id) where match_id is not null;

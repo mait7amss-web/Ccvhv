@@ -11,6 +11,7 @@ const LEAGUES: Record<string, string> = {
   seriea: "الدوري الإيطالي",
   bundesliga: "الدوري الألماني",
   ligue1: "الدوري الفرنسي",
+  ucl: "دوري أبطال أوروبا",
 };
 
 const sb = createClient(
