@@ -21,7 +21,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 7; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 8; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -39,6 +39,9 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 
 const EMOJIS = ["👍", "🔥", "😂", "😡"];
 const BUCKET = "chat-images";
+const AUDIO_BUCKET = "chat-audio";
+// Built-in sticker pack: [id, label]
+const STICKERS = [["goal","هدددف!"],["offside","تسلل!"],["var","راجع الفار"],["red","كرت أحمر"],["yellow","إنذار!"],["wow","يا ساتر!"],["fire","نااار"],["remontada","ريمونتادا"],["ref","وين الحكم؟"],["champ","الأبطال"],["sleep","الدفاع نايم"],["penalty","بلنتي!"],["lol","ههههه"],["gg","كفو!"]];
 const PAGE = 200;
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -150,6 +153,10 @@ $("authForm").addEventListener("submit", async (e) => {
   if (mode === "reset" && password.length < 6) return authMsg("كلمة المرور لازم تكون ٦ أحرف أو أكثر.", "");
   if ((mode === "in" || mode === "up") && (!email || !password)) return authMsg("اكتب الإيميل وكلمة المرور.", "");
   if (mode === "up" && !name) return authMsg("اكتب اسمك.", "");
+  if (mode === "up") {
+    const { data: free, error: nErr } = await sb.rpc("name_available", { n: name });
+    if (!nErr && free === false) return authMsg("الاسم \"" + name + "\" مستخدم من شخص ثاني. اختر اسم غيره.", "");
+  }
   $("authBtn").disabled = true; authMsg("", "");
   try {
     if (mode === "forgot") {
@@ -241,7 +248,7 @@ function renderMe() {
 /* ---------- Messages, reactions, votes ---------- */
 async function loadChannel(ch) {
   const { data, error } = await sb.from("messages")
-    .select("id,user_id,channel,body,image_path,poll,created_at")
+    .select("id,user_id,channel,body,image_path,poll,created_at,hidden,reply_to,mentions,gif_url,sticker,audio_path,audio_secs")
     .eq("channel", ch).order("created_at", { ascending: false }).limit(PAGE);
   if (error) { showErr("ما قدرنا نجيب الرسائل. تأكد من الاتصال."); return; }
   const fresh = (data || []).reverse();
@@ -260,12 +267,13 @@ async function loadChannel(ch) {
   for (const x of v.data || []) votes[x.message_id][x.user_id] = x.option;
 }
 
-async function signUrls(paths) {
+// Signed URLs are cached per path; audio paths are stored under "a:" + path.
+async function signUrls(paths, bucket = BUCKET, prefix = "") {
   const now = Date.now();
-  const need = [...new Set(paths)].filter(p => !signed[p] || signed[p].exp < now + 60000);
+  const need = [...new Set(paths)].filter(p => !signed[prefix + p] || signed[prefix + p].exp < now + 60000);
   if (!need.length) return;
-  const { data } = await sb.storage.from(BUCKET).createSignedUrls(need, 3600);
-  for (const r of data || []) if (r.signedUrl) signed[r.path] = { url: r.signedUrl, exp: now + 3600000 };
+  const { data } = await sb.storage.from(bucket).createSignedUrls(need, 3600);
+  for (const r of data || []) if (r.signedUrl) signed[prefix + r.path] = { url: r.signedUrl, exp: now + 3600000 };
 }
 
 function findMsg(id) {
@@ -397,6 +405,7 @@ async function render(jump) {
   await Promise.all([
     loadPeople(ids),
     signUrls(msgs.filter(m => m.image_path).map(m => m.image_path)),
+    signUrls(msgs.filter(m => m.audio_path).map(m => m.audio_path), AUDIO_BUCKET, "a:"),
   ]).catch(() => {});
   if (seq !== renderSeq) return;
   const sc = $("scroller");
@@ -419,12 +428,51 @@ async function render(jump) {
   if (jump || nearBottom) sc.scrollTop = sc.scrollHeight;
 }
 
+function snippet(m) {
+  if (!m) return "رسالة محذوفة";
+  if (m.body) return m.body.length > 80 ? m.body.slice(0, 79) + "…" : m.body;
+  if (m.poll) return "📊 " + m.poll.question;
+  if (m.image_path || m.localUrl) return "📷 صورة";
+  if (m.gif_url) return "GIF";
+  if (m.sticker) return "ملصق " + (STICKERS.find(s => s[0] === m.sticker)?.[1] || "");
+  if (m.audio_path || m.localAudio) return "🎤 رسالة صوتية " + fmtSecs(m.audio_secs || 0);
+  return "";
+}
+const fmtSecs = (x) => { x = Math.round(x || 0); return Math.floor(x / 60) + ":" + String(x % 60).padStart(2, "0"); };
+
+// Message text with @mentions highlighted (only names the sender actually mentioned)
+function bodyEl(m) {
+  const box = el("div", "txt");
+  const names = (m.mentions || []).map(id => people[id]?.name).filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!names.length) { box.textContent = m.body; return box; }
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp("@(" + names.map(esc).join("|") + ")", "g");
+  let last = 0, mt;
+  while ((mt = re.exec(m.body))) {
+    box.append(m.body.slice(last, mt.index));
+    const id = (m.mentions || []).find(i => people[i]?.name === mt[1]);
+    box.append(el("span", "mention" + (id === me.id ? " me" : ""), mt[0]));
+    last = mt.index + mt[0].length;
+  }
+  box.append(m.body.slice(last));
+  return box;
+}
+
+function scrollToMsg(id) {
+  const r = document.querySelector(`.row[data-id="${id}"]`);
+  if (!r) { toast("الرسالة الأصلية قديمة ومو ظاهرة هنا."); return; }
+  r.scrollIntoView({ block: "center", behavior: "smooth" });
+  r.classList.remove("flash"); void r.offsetWidth; r.classList.add("flash");
+}
+
 function messageRow(m, cont) {
   const mine = m.user_id === me?.id;
-  const row = el("div", "row " + (mine ? "mine" : "theirs") + (cont ? " cont" : "") + (seen.has(m.id) ? "" : " fresh"));
+  const bare = (m.sticker || m.gif_url) && !m.body && !m.reply_to;
+  const row = el("div", "row " + (mine ? "mine" : "theirs") + (cont ? " cont" : "") + (seen.has(m.id) ? "" : " fresh") + ((m.mentions || []).includes(me?.id) ? " mentioned" : ""));
+  row.dataset.id = m.id;
   seen.add(m.id);
   const wrap = el("div", "msgwrap");
-  const b = el("div", "bubble");
+  const b = el("div", "bubble" + (bare ? " bare" : ""));
   if (!mine && !cont) {
     const w = el("div", "who", nameOf(m.user_id));
     w.style.color = TEAM_BY_ID[people[m.user_id]?.team]?.color || colorFor(m.user_id);
@@ -438,8 +486,25 @@ function messageRow(m, cont) {
     pic.onclick = (e) => { e.stopPropagation(); if (pic.src) { $("viewerImg").src = pic.src; $("viewer").hidden = false; } };
     b.append(pic);
   }
+  if (m.reply_to) {
+    const orig = findMsg(m.reply_to);
+    const q = el("button", "quote"); q.type = "button";
+    q.append(el("b", null, orig ? nameOf(orig.user_id) : "رد على"), el("span", null, snippet(orig)));
+    q.onclick = (e) => { e.stopPropagation(); scrollToMsg(m.reply_to); };
+    b.append(q);
+  }
+  if (m.sticker) {
+    const st = el("img", "sticker"); st.src = `stickers/${m.sticker}.webp`; st.alt = STICKERS.find(s => s[0] === m.sticker)?.[1] || "ملصق";
+    b.append(st);
+  }
+  if (m.gif_url) {
+    const g = el("img", "pic gif"); g.src = m.gif_url; g.alt = "GIF"; g.loading = "lazy";
+    g.onclick = (e) => { e.stopPropagation(); $("viewerImg").src = g.src; $("viewer").hidden = false; };
+    b.append(g);
+  }
+  if (m.audio_path || m.localAudio) b.append(voiceEl(m));
   if (m.poll) b.append(pollEl(m));
-  if (m.body) b.append(el("div", null, m.body));
+  if (m.body) b.append(bodyEl(m));
   const list = reacts[m.id] || [];
   if (list.length) {
     const box = el("div", "reacts");
@@ -475,6 +540,7 @@ function messageRow(m, cont) {
     wrap.append(pk);
     const acts = el("div", "msgacts");
     const act = (label, fn, cls) => { const x = el("button", cls || "", label); x.type = "button"; x.onclick = (e) => { e.stopPropagation(); pickerFor = null; fn(x); }; acts.append(x); };
+    act("↩️ رد", () => setReply(m));
     if (!mine) {
       act("🚩 تبليغ", () => reportSheet(m));
       act("🚫 حظر " + nameOf(m.user_id), () => blockSheet(m.user_id));
@@ -544,7 +610,8 @@ function showErr(text) { $("err").textContent = text; $("err").hidden = !text; }
 const msgEl = $("msg"), sendBtn = $("sendBtn");
 function grow() {
   msgEl.style.height = "auto"; msgEl.style.height = Math.min(msgEl.scrollHeight, 120) + "px";
-  sendBtn.disabled = !msgEl.value.trim();
+  const has = Boolean(msgEl.value.trim());
+  sendBtn.disabled = !has; sendBtn.hidden = !has; $("micBtn").hidden = has;
 }
 msgEl.addEventListener("input", grow);
 msgEl.addEventListener("keydown", (e) => {
@@ -566,11 +633,14 @@ $("composer").addEventListener("submit", async (e) => {
   e.preventDefault();
   const body = msgEl.value.trim();
   if (!body) return;
-  msgEl.value = ""; grow(); showErr("");
-  const tmp = { id: "tmp" + Date.now(), user_id: me.id, channel, body, created_at: new Date().toISOString(), pending: true };
+  const mentions = [...mentionMap].filter(([n, id]) => body.includes("@" + n) && id !== me.id).map(([, id]) => id).slice(0, 20);
+  const reply_to = replyTo?.id || null;
+  msgEl.value = ""; grow(); showErr(""); clearReply(); closeMentions();
+  const tmp = { id: "tmp" + Date.now(), user_id: me.id, channel, body, mentions, reply_to, created_at: new Date().toISOString(), pending: true };
   pending.push(tmp); render(true);
   try {
-    await insertMessage({ channel: tmp.channel, body });
+    await insertMessage({ channel: tmp.channel, body, ...(mentions.length ? { mentions } : {}), ...(reply_to ? { reply_to } : {}) });
+    mentionMap.clear();
   } catch (err) {
     msgEl.value = body; grow();
     showErr(err?.code === "42501" ? "حسابك موقوف عن الكتابة بسبب مخالفة الشروط." : "ما وصلت الرسالة. تأكد من الاتصال وجرّب مرة ثانية.");
@@ -584,6 +654,7 @@ async function deleteMessage(m, btn) {
   const { error } = await sb.from("messages").delete().eq("id", m.id);
   if (error) { btn.disabled = false; showErr("ما انحذفت الرسالة. جرّب مرة ثانية."); return; }
   if (m.image_path) sb.storage.from(BUCKET).remove([m.image_path]);
+  if (m.audio_path) sb.storage.from(AUDIO_BUCKET).remove([m.audio_path]);
   byChannel[m.channel] = byChannel[m.channel].filter(x => x.id !== m.id);
   render(false);
 }
@@ -625,7 +696,8 @@ $("picker").addEventListener("change", async () => {
     const up = await sb.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || "image/jpeg" });
     if (up.error) throw up.error;
     signed[path] = { url: tmp.localUrl, exp: Date.now() + 3000000 };
-    await insertMessage({ channel: tmp.channel, body: caption || null, image_path: path });
+    await insertMessage({ channel: tmp.channel, body: caption || null, image_path: path, ...(replyTo ? { reply_to: replyTo.id } : {}) });
+    clearReply();
   } catch (err) {
     msgEl.value = caption; grow();
     const m = String(err?.message || "").toLowerCase();
@@ -681,7 +753,8 @@ $("pollBtn").onclick = () => openSheet("تصويت جديد 📊", (s) => {
     const options = opts.map(o => o.value.trim()).filter(Boolean);
     if (!question) return "اكتب السؤال.";
     if (options.length < 2) return "اكتب خيارين على الأقل.";
-    await insertMessage({ channel, poll: { question, options } });
+    await insertMessage({ channel, poll: { question, options }, ...(replyTo ? { reply_to: replyTo.id } : {}) });
+    clearReply();
     msgEl.value = ""; grow();
     render(true);
   });
@@ -704,6 +777,7 @@ $("meBtn").onclick = () => openSheet("ملفي", (s) => {
     const name = nm.value.trim();
     if (!name) return "اكتب اسمك.";
     const { error } = await sb.from("profiles").update({ name, team: sel.value || null }).eq("id", me.id);
+    if (error?.code === "23505") return "الاسم \"" + name + "\" مستخدم من شخص ثاني. اختر اسم غيره.";
     if (error) return "ما انحفظ. جرّب مرة ثانية.";
     people[me.id] = { name, team: sel.value || null };
     renderMe(); refreshView();
@@ -792,8 +866,10 @@ function deleteAccountSheet() {
     sheetActions(s, "احذف حسابي", async () => {
       if (inp.value.trim() !== "احذف") return "اكتب كلمة: احذف";
       try {
-        const { data: files } = await sb.storage.from(BUCKET).list(me.id, { limit: 1000 });
-        if (files?.length) await sb.storage.from(BUCKET).remove(files.map(f => `${me.id}/${f.name}`));
+        for (const bk of [BUCKET, AUDIO_BUCKET]) {
+          const { data: files } = await sb.storage.from(bk).list(me.id, { limit: 1000 });
+          if (files?.length) await sb.storage.from(bk).remove(files.map(f => `${me.id}/${f.name}`));
+        }
       } catch {}
       try { const sub = await currentSub(); if (sub) await sub.unsubscribe(); } catch {}
       const { error } = await sb.rpc("delete_my_account");
@@ -1152,4 +1228,239 @@ async function renderNotif(box) {
     renderNotif(box);
   };
   box.append(off);
+}
+
+/* ---------- Reply ---------- */
+let replyTo = null;
+function setReply(m) {
+  replyTo = m;
+  $("rbName").textContent = "رد على " + (m.user_id === me.id ? "نفسك" : nameOf(m.user_id));
+  $("rbText").textContent = snippet(m);
+  $("replyBar").hidden = false;
+  msgEl.focus();
+}
+function clearReply() { replyTo = null; $("replyBar").hidden = true; }
+$("rbClose").onclick = clearReply;
+
+/* ---------- @mentions ---------- */
+const mentionMap = new Map(); // name -> user id, for names picked from the list
+let mentionSeq = 0;
+function closeMentions() { $("mentionBox").hidden = true; $("mentionBox").textContent = ""; }
+async function onMentionInput() {
+  const pos = msgEl.selectionStart ?? msgEl.value.length;
+  const before = msgEl.value.slice(0, pos);
+  const mt = before.match(/(^|\s)@([^\s@]{0,20})$/);
+  if (!mt) return closeMentions();
+  const q = mt[2], seq = ++mentionSeq;
+  // people seen in this league first, then a name search
+  const local = Object.entries(people).filter(([id, p]) => id !== me.id && p.name && p.name.startsWith(q)).map(([id, p]) => ({ id, name: p.name, team: p.team }));
+  let found = local;
+  if (q.length >= 1) {
+    const { data } = await sb.from("profiles").select("id,name,team").ilike("name", q.replace(/[%_]/g, "") + "%").neq("id", me.id).limit(8);
+    if (seq !== mentionSeq) return;
+    for (const p of data || []) { people[p.id] = { name: p.name, team: p.team }; if (!found.some(f => f.id === p.id)) found.push(p); }
+  }
+  found = found.slice(0, 6);
+  const box = $("mentionBox"); box.textContent = "";
+  if (!found.length) return closeMentions();
+  for (const p of found) {
+    const b = el("button", "mopt"); b.type = "button";
+    b.append(avatarEl(p.id), el("span", null, p.name));
+    const tp = teamPill(p.id); if (tp) b.append(tp);
+    b.onmousedown = (e) => e.preventDefault(); // keep the keyboard open
+    b.onclick = () => {
+      const start = before.length - q.length - 1;
+      msgEl.value = msgEl.value.slice(0, start) + "@" + p.name + " " + msgEl.value.slice(pos);
+      const caret = start + p.name.length + 2;
+      msgEl.setSelectionRange(caret, caret);
+      mentionMap.set(p.name, p.id);
+      closeMentions(); grow(); msgEl.focus();
+    };
+    box.append(b);
+  }
+  box.hidden = false;
+}
+msgEl.addEventListener("input", onMentionInput);
+msgEl.addEventListener("blur", () => setTimeout(closeMentions, 150));
+
+/* ---------- Plus menu (photo, poll) ---------- */
+$("plusBtn").onclick = () => openSheet("أرسل", (s) => {
+  const list = el("div", "plusmenu");
+  const item = (icon, label, sub, fn) => {
+    const b = el("button", "plusitem"); b.type = "button";
+    const t = el("div"); t.append(el("b", null, label), el("small", null, sub));
+    b.append(el("i", null, icon), t);
+    b.onclick = () => { closeSheet(); fn(); };
+    list.append(b);
+  };
+  item("📷", "صورة من الاستديو", "صورة أو GIF من جوالك", () => $("attachBtn").click());
+  item("📊", "تصويت", "سؤال مع خيارين لين أربعة", () => $("pollBtn").click());
+  item("😎", "ملصق أو GIF", "ملصقات الكورة أو بحث GIF", () => $("stickerBtn").click());
+  s.append(list);
+});
+
+/* ---------- Stickers & GIFs ---------- */
+async function sendMedia(row, previewKey) {
+  const tmp = { id: "tmp" + Date.now(), user_id: me.id, channel, created_at: new Date().toISOString(), pending: true, reply_to: replyTo?.id || null, ...row };
+  const reply_to = replyTo?.id || null; clearReply();
+  pending.push(tmp); render(true);
+  try { await insertMessage({ channel, ...row, ...(reply_to ? { reply_to } : {}) }); }
+  catch (err) { showErr(err?.code === "42501" ? "حسابك موقوف عن الكتابة بسبب مخالفة الشروط." : "ما انرسل. جرّب مرة ثانية."); }
+  finally { pending.splice(pending.indexOf(tmp), 1); render(false); }
+}
+let stickerTab = "stickers";
+$("stickerBtn").onclick = () => openSheet("ملصقات وGIF", (s) => {
+  const tabs = el("div", "tabs stabs");
+  const t1 = el("button", null, "⚽ ملصقات"), t2 = el("button", null, "GIF");
+  t1.type = t2.type = "button";
+  tabs.append(t1, t2); s.append(tabs);
+  const body = el("div"); s.append(body);
+  const show = (tab) => {
+    stickerTab = tab;
+    t1.setAttribute("aria-selected", String(tab === "stickers")); t2.setAttribute("aria-selected", String(tab === "gif"));
+    body.textContent = "";
+    if (tab === "stickers") {
+      const g = el("div", "stgrid");
+      for (const [id, label] of STICKERS) {
+        const b = el("button"); b.type = "button"; b.setAttribute("aria-label", label);
+        const im = el("img"); im.src = `stickers/${id}.webp`; im.alt = label; b.append(im);
+        b.onclick = () => { closeSheet(); sendMedia({ sticker: id }); };
+        g.append(b);
+      }
+      body.append(g);
+    } else gifPanel(body);
+  };
+  t1.onclick = () => show("stickers"); t2.onclick = () => show("gif");
+  show(stickerTab);
+});
+
+function gifPanel(body) {
+  const key = (window.HALA_CONFIG || {}).giphyKey;
+  if (!key) {
+    body.append(el("p", "sheet-p", "بحث الـGIF للحين ما تفعّل. تقدر ترسل GIF من الاستديو من زر + ← صورة من الاستديو."));
+    return;
+  }
+  const inp = el("input"); inp.type = "search"; inp.id = "gifQ"; inp.placeholder = "دوّر GIF… مثلًا: goal، ميسي، celebration";
+  const grid = el("div", "gifgrid");
+  const credit = el("div", "giphy", "Powered by GIPHY");
+  body.append(inp, grid, credit);
+  let seq = 0, timer = null;
+  const load = async (q) => {
+    const my = ++seq;
+    grid.textContent = ""; grid.append(el("p", "sheet-p", "يحمّل…"));
+    const url = q
+      ? `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&limit=24&rating=pg-13&lang=ar`
+      : `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=football%20goal&limit=24&rating=pg-13`;
+    try {
+      const r = await fetch(url); const j = await r.json();
+      if (my !== seq) return;
+      grid.textContent = "";
+      for (const g of j.data || []) {
+        const im = g.images?.fixed_width; if (!im?.url) continue;
+        const b = el("button"); b.type = "button";
+        const i = el("img"); i.src = im.webp || im.url; i.alt = g.title || "GIF"; i.loading = "lazy"; b.append(i);
+        b.onclick = () => { closeSheet(); sendMedia({ gif_url: im.url.split("?")[0] }); };
+        grid.append(b);
+      }
+      if (!grid.childNodes.length) grid.append(el("p", "sheet-p", "ما لقينا شي. جرّب كلمة ثانية."));
+    } catch { grid.textContent = ""; grid.append(el("p", "sheet-p", "ما قدرنا نجيب الـGIF. تأكد من الاتصال.")); }
+  };
+  inp.oninput = () => { clearTimeout(timer); timer = setTimeout(() => load(inp.value.trim()), 350); };
+  load("");
+}
+
+/* ---------- Voice messages ---------- */
+const player = new Audio(); let playingId = null;
+player.addEventListener("timeupdate", () => updateVoiceUI());
+player.addEventListener("ended", () => { playingId = null; updateVoiceUI(); });
+player.addEventListener("pause", () => updateVoiceUI());
+function updateVoiceUI() {
+  for (const v of document.querySelectorAll(".voice")) {
+    const on = v.dataset.voice === String(playingId) && !player.paused;
+    v.querySelector(".vplay").textContent = on ? "❚❚" : "▶";
+    const dur = player.duration && isFinite(player.duration) ? player.duration : Number(v.dataset.secs) || 1;
+    const p = v.dataset.voice === String(playingId) ? Math.min(1, player.currentTime / dur) : 0;
+    v.querySelector(".vfill").style.width = (p * 100) + "%";
+    v.querySelector(".vtime").textContent = v.dataset.voice === String(playingId) ? fmtSecs(player.currentTime) : fmtSecs(Number(v.dataset.secs));
+  }
+}
+function voiceEl(m) {
+  const v = el("div", "voice"); v.dataset.voice = m.id; v.dataset.secs = m.audio_secs || 0;
+  const btn = el("button", "vplay", "▶"); btn.type = "button"; btn.setAttribute("aria-label", "شغّل الرسالة الصوتية");
+  const bar = el("div", "vbar"); bar.append(el("div", "vfill"));
+  v.append(btn, bar, el("span", "vtime", fmtSecs(m.audio_secs)));
+  btn.onclick = async (e) => {
+    e.stopPropagation();
+    if (playingId === m.id && !player.paused) { player.pause(); return; }
+    if (playingId !== m.id) {
+      let src = m.localAudio || signed["a:" + m.audio_path]?.url;
+      if (!src && m.audio_path) { await signUrls([m.audio_path], AUDIO_BUCKET, "a:"); src = signed["a:" + m.audio_path]?.url; }
+      if (!src) { toast("ما قدرنا نشغّل الرسالة."); return; }
+      player.src = src; playingId = m.id;
+    }
+    try { await player.play(); } catch { toast("ما قدرنا نشغّل الرسالة."); }
+    updateVoiceUI();
+  };
+  bar.onclick = (e) => {
+    e.stopPropagation();
+    if (playingId !== m.id || !isFinite(player.duration)) return;
+    const r = bar.getBoundingClientRect();
+    player.currentTime = player.duration * Math.min(1, Math.max(0, (r.right - e.clientX) / r.width)); // RTL: progress grows from the right
+  };
+  setTimeout(updateVoiceUI, 0);
+  return v;
+}
+
+let rec = null, recChunks = [], recStart = 0, recTimer = null, recStream = null, recCancelled = false;
+const MAX_REC = 120;
+function pickMime() {
+  if (!window.MediaRecorder) return null;
+  for (const t of ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"]) if (MediaRecorder.isTypeSupported?.(t)) return t;
+  return "";
+}
+$("micBtn").onclick = async () => {
+  const mime = pickMime();
+  if (mime === null || !navigator.mediaDevices?.getUserMedia) { showErr("جهازك ما يدعم تسجيل الصوت من المتصفح."); return; }
+  try { recStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { showErr("لازم تسمح للتطبيق يستخدم المايك عشان تسجّل."); return; }
+  showErr("");
+  recChunks = []; recCancelled = false;
+  rec = new MediaRecorder(recStream, mime ? { mimeType: mime } : undefined);
+  rec.ondataavailable = (e) => { if (e.data?.size) recChunks.push(e.data); };
+  rec.onstop = onRecStop;
+  rec.start(250); recStart = Date.now();
+  $("composer").hidden = true; $("recBar").hidden = false;
+  $("recTime").textContent = "0:00";
+  recTimer = setInterval(() => {
+    const secs = (Date.now() - recStart) / 1000;
+    $("recTime").textContent = fmtSecs(secs);
+    if (secs >= MAX_REC) $("recSend").click();
+  }, 250);
+};
+function endRecUI() {
+  clearInterval(recTimer);
+  recStream?.getTracks().forEach(t => t.stop()); recStream = null;
+  $("composer").hidden = false; $("recBar").hidden = true;
+}
+$("recCancel").onclick = () => { recCancelled = true; rec?.state !== "inactive" && rec.stop(); endRecUI(); };
+$("recSend").onclick = () => { recCancelled = false; rec?.state !== "inactive" && rec.stop(); endRecUI(); };
+async function onRecStop() {
+  const secs = Math.min(MAX_REC, (Date.now() - recStart) / 1000);
+  if (recCancelled) return;
+  if (secs < 0.8) { toast("التسجيل قصير مرة. اضغط المايك وتكلم."); return; }
+  const type = (rec.mimeType || recChunks[0]?.type || "audio/mp4").split(";")[0];
+  const blob = new Blob(recChunks, { type });
+  const ext = { "audio/mp4": "m4a", "audio/webm": "webm", "audio/ogg": "ogg", "audio/aac": "aac", "audio/mpeg": "mp3" }[type] || "m4a";
+  const reply_to = replyTo?.id || null; clearReply();
+  const tmp = { id: "tmp" + Date.now(), user_id: me.id, channel, created_at: new Date().toISOString(), pending: true, localAudio: URL.createObjectURL(blob), audio_secs: secs, reply_to };
+  pending.push(tmp); render(true);
+  try {
+    const path = `${me.id}/${crypto.randomUUID()}.${ext}`;
+    const up = await sb.storage.from(AUDIO_BUCKET).upload(path, blob, { contentType: type });
+    if (up.error) throw up.error;
+    signed["a:" + path] = { url: tmp.localAudio, exp: Date.now() + 3000000 };
+    await insertMessage({ channel: tmp.channel, audio_path: path, audio_secs: Math.round(secs * 10) / 10, ...(reply_to ? { reply_to } : {}) });
+  } catch (err) {
+    showErr(err?.code === "42501" ? "حسابك موقوف عن الكتابة بسبب مخالفة الشروط." : "ما انرسلت الرسالة الصوتية. جرّب مرة ثانية.");
+  } finally { pending.splice(pending.indexOf(tmp), 1); render(false); }
 }

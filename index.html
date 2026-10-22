@@ -285,6 +285,53 @@ a.small { text-decoration: none; display: inline-block; }
 .sheet h4 { margin: 6px 0 0; font-size: 15px; }
 .toast { position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); bottom: calc(90px + env(safe-area-inset-bottom, 0px)); background: var(--chalk); color: var(--pitch); font-weight: 700; font-size: 13.5px; padding: 10px 16px; border-radius: 12px; max-width: calc(100% - 32px); box-shadow: 0 6px 24px rgba(0,0,0,.4); }
 
+/* Reply, mentions, stickers, GIF, voice */
+.replybar { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-inline-start: 4px solid var(--league); border-radius: 12px; padding: 6px 10px; margin-bottom: 8px; }
+.rb-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 12.5px; }
+.rb-txt b { color: var(--league); font-size: 12.5px; }
+.rb-txt span { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.replybar button { border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 4px 6px; }
+.mentions { background: var(--card-2); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 8px; overflow: hidden; max-height: 240px; overflow-y: auto; }
+.mopt { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--chalk); padding: 8px 12px; font-weight: 700; font-size: 14px; cursor: pointer; text-align: start; }
+.mopt:last-child { border-bottom: 0; }
+.mopt .avatar { width: 28px; height: 28px; font-size: 12px; }
+.mention { font-weight: 800; color: var(--league); background: color-mix(in srgb, var(--league) 18%, transparent); border-radius: 6px; padding: 0 3px; }
+.mine .mention { color: var(--league-ink); background: rgba(0,0,0,.18); }
+.mention.me { background: #e3c84a; color: #1c1600; }
+.row.mentioned .bubble { box-shadow: 0 0 0 2px #e3c84a; }
+.row.flash .bubble { animation: flash 1.2s ease-out; }
+@keyframes flash { 0%, 30% { box-shadow: 0 0 0 4px #fff; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.quote { display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: start; border: 0; border-inline-start: 3px solid var(--league); background: rgba(0,0,0,.18); color: inherit; border-radius: 8px; padding: 4px 8px; margin-bottom: 4px; cursor: pointer; font: inherit; }
+.mine .quote { border-inline-start-color: var(--league-ink); }
+.quote b { font-size: 12px; } .quote span { font-size: 12.5px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
+.bubble.bare { background: transparent !important; border-color: transparent !important; padding: 0; }
+.bubble.bare .who { padding: 0 4px; }
+.sticker { width: 130px; height: 130px; display: block; }
+.pic.gif { min-height: 60px; }
+.voice { display: flex; align-items: center; gap: 10px; min-width: 200px; padding: 2px 0; }
+.vplay { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--league); color: var(--league-ink); font-size: 13px; cursor: pointer; }
+.mine .vplay { background: var(--league-ink); color: var(--league); }
+.vbar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,.18); position: relative; cursor: pointer; overflow: hidden; }
+.vfill { position: absolute; inset: 0 0 0 auto; width: 0; background: currentColor; opacity: .9; }
+.vtime { font-size: 12px; font-variant-numeric: tabular-nums; opacity: .8; flex: none; }
+.recbar { display: flex; align-items: center; gap: 10px; }
+.recinfo { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 10px 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rechint { color: var(--muted); font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recdot { width: 10px; height: 10px; border-radius: 50%; background: #ff4b3e; flex: none; animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+.plusmenu { display: flex; flex-direction: column; gap: 8px; }
+.plusitem { display: flex; align-items: center; gap: 14px; border: 1px solid var(--line); background: var(--card); color: var(--chalk); border-radius: 14px; padding: 12px 14px; cursor: pointer; text-align: start; font: inherit; }
+.plusitem i { font-style: normal; font-size: 26px; width: 34px; text-align: center; }
+.plusitem b { display: block; font-size: 15px; } .plusitem small { color: var(--muted); font-size: 12.5px; }
+.stabs { margin-bottom: 4px; }
+.stgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.stgrid button, .gifgrid button { border: 0; background: var(--card); border-radius: 12px; padding: 4px; cursor: pointer; aspect-ratio: 1; display: grid; place-items: center; }
+.stgrid img { width: 100%; height: auto; max-width: 100%; }
+.gifgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; min-height: 120px; }
+.gifgrid img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+#gifQ { font: 15px var(--body); color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; width: 100%; }
+.giphy { font-size: 11px; color: var(--muted); text-align: center; direction: ltr; }
+
 .viewer { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.92); display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px)); cursor: zoom-out; }
 .viewer img { max-width: 100%; max-height: 100%; border-radius: 8px; }
 @media (prefers-reduced-motion: no-preference) {
@@ -360,19 +407,39 @@ a.small { text-decoration: none; display: inline-block; }
 </main>
 <footer id="chatFooter" hidden>
   <div class="wrap">
+    <div class="replybar" id="replyBar" hidden><div class="rb-txt"><b id="rbName"></b><span id="rbText"></span></div><button type="button" id="rbClose" aria-label="إلغاء الرد">✕</button></div>
+    <div class="mentions" id="mentionBox" hidden></div>
     <form id="composer">
       <input type="file" id="picker" accept="image/*" hidden>
-      <button class="round attach" id="attachBtn" type="button" aria-label="إرفاق صورة من الاستديو">
+      <button class="round attach" id="plusBtn" type="button" aria-label="أرسل صورة أو تصويت">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button class="round attach" id="stickerBtn" type="button" aria-label="ملصقات وGIF">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c1.8 2 5.2 2 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/></svg>
+      </button>
+      <button class="round attach" id="attachBtn" type="button" aria-label="إرفاق صورة من الاستديو" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>
       </button>
-      <button class="round attach" id="pollBtn" type="button" aria-label="سوّ تصويت">
+      <button class="round attach" id="pollBtn" type="button" aria-label="سوّ تصويت" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>
       </button>
       <textarea id="msg" rows="1" maxlength="2000" placeholder="اكتب رأيك…" aria-label="الرسالة"></textarea>
-      <button class="round send" id="sendBtn" type="submit" aria-label="إرسال" disabled>
+      <button class="round send" id="micBtn" type="button" aria-label="سجّل رسالة صوتية">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <button class="round send" id="sendBtn" type="submit" aria-label="إرسال" disabled hidden>
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg>
       </button>
     </form>
+    <div class="recbar" id="recBar" hidden>
+      <button type="button" class="round attach" id="recCancel" aria-label="احذف التسجيل">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+      </button>
+      <div class="recinfo"><span class="recdot"></span><span id="recTime">0:00</span><span class="rechint">يسجّل… اضغط إرسال لما تخلص</span></div>
+      <button type="button" class="round send" id="recSend" aria-label="أرسل التسجيل">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="transform:scaleX(-1)"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg>
+      </button>
+    </div>
     <div class="err" id="err" hidden></div>
   </div>
 </footer>
@@ -381,6 +448,6 @@ a.small { text-decoration: none; display: inline-block; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=3"></script>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>

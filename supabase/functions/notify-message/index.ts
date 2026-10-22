@@ -1,5 +1,6 @@
 // Sends a push notification for each new chat message to everyone who chose
-// that league in their notification settings (except the sender).
+// that league in their notification settings, plus anyone mentioned or replied to
+// (never to the sender, and never to people who blocked the sender).
 // Called by the on_message_notify database trigger (see supabase/notifications.sql).
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
@@ -39,32 +40,57 @@ Deno.serve(async (req) => {
   const { id } = await req.json().catch(() => ({ id: null }));
   if (!id) return new Response("bad request", { status: 400 });
 
-  const { data: msg } = await sb.from("messages").select("id,user_id,channel,body,image_path,poll").eq("id", id).maybeSingle();
+  const { data: msg } = await sb.from("messages")
+    .select("id,user_id,channel,body,image_path,poll,gif_url,sticker,audio_path,mentions,reply_to")
+    .eq("id", id).maybeSingle();
   if (!msg) return new Response("gone", { status: 200 });
 
-  const [{ data: author }, { data: subs }] = await Promise.all([
+  const { data: replied } = msg.reply_to
+    ? await sb.from("messages").select("user_id").eq("id", msg.reply_to).maybeSingle()
+    : { data: null };
+  const direct = new Set<string>([...(msg.mentions || []), ...(replied?.user_id ? [replied.user_id] : [])]);
+  direct.delete(msg.user_id);
+
+  const [{ data: author }, { data: leagueSubs }, { data: directSubs }, { data: blockers }] = await Promise.all([
     sb.from("profiles").select("name").eq("id", msg.user_id).maybeSingle(),
     sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").contains("leagues", [msg.channel]).neq("user_id", msg.user_id),
+    direct.size ? sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").in("user_id", [...direct]) : Promise.resolve({ data: [] }),
+    sb.from("blocks").select("blocker").eq("blocked", msg.user_id),
   ]);
-  if (!subs?.length) return new Response("no subscribers", { status: 200 });
+  const blocked = new Set((blockers || []).map((b) => b.blocker));
+  const subs = new Map<string, { endpoint: string; p256dh: string; auth: string; user_id: string }>();
+  for (const s of [...(leagueSubs || []), ...(directSubs || [])]) if (!blocked.has(s.user_id)) subs.set(s.endpoint, s);
+  if (!subs.size) return new Response("no subscribers", { status: 200 });
 
-  const text = msg.poll ? `📊 تصويت: ${msg.poll.question}` : msg.body ? msg.body : "📷 صورة";
-  const payload = JSON.stringify({
-    title: `${author?.name || "شخص"} · ${LEAGUES[msg.channel] || ""}`,
-    body: text.length > 140 ? text.slice(0, 139) + "…" : text,
-    url: `./?league=${msg.channel}&view=chat`,
-    tag: `chat-${msg.channel}`,
-  });
+  const text = msg.poll ? `📊 تصويت: ${msg.poll.question}`
+    : msg.body ? msg.body
+    : msg.audio_path ? "🎤 رسالة صوتية"
+    : msg.sticker ? "ملصق 😄"
+    : msg.gif_url ? "GIF"
+    : "📷 صورة";
+  const name = author?.name || "شخص";
+  const league = LEAGUES[msg.channel] || "";
+  const payloadFor = (userId: string) => {
+    const mentioned = (msg.mentions || []).includes(userId);
+    const repliedTo = replied?.user_id === userId;
+    const title = mentioned ? `${name} منشنك في ${league}` : repliedTo ? `${name} رد عليك في ${league}` : `${name} · ${league}`;
+    return JSON.stringify({
+      title,
+      body: text.length > 140 ? text.slice(0, 139) + "…" : text,
+      url: `./?league=${msg.channel}&view=chat`,
+      tag: mentioned || repliedTo ? `direct-${msg.id}` : `chat-${msg.channel}`,
+    });
+  };
 
   const dead: string[] = [];
-  await Promise.all(subs.map(async (s) => {
+  await Promise.all([...subs.values()].map(async (s) => {
     try {
-      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 3600 });
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payloadFor(s.user_id), { TTL: 3600 });
     } catch (e) {
       const code = (e as { statusCode?: number }).statusCode;
       if (code === 404 || code === 410) dead.push(s.endpoint);
     }
   }));
   if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
-  return new Response(`sent ${subs.length - dead.length}`, { status: 200 });
+  return new Response(`sent ${subs.size - dead.length}`, { status: 200 });
 });
