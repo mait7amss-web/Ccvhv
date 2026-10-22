@@ -12,7 +12,7 @@ create table if not exists public.profiles (
 create table if not exists public.messages (
   id bigint generated always as identity primary key,
   user_id uuid not null default auth.uid() references public.profiles (id) on delete cascade,
-  channel text not null check (channel in ('general', 'friends', 'work')),
+  channel text not null check (channel in ('epl', 'laliga', 'seriea', 'bundesliga', 'ligue1')),
   body text check (char_length(body) <= 2000),
   image_path text,
   created_at timestamptz not null default now(),
