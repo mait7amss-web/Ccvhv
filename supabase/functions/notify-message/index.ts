@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
   const input = await req.json().catch(() => ({}));
   if (input.event_id) return crowdEvent(input.event_id);
   if (input.arena_id) return arenaStart(input.arena_id);
+  if (input.notif_id) return communityNotif(input.notif_id);
   const id = input.id;
   if (!id) return new Response("bad request", { status: 400 });
 
@@ -155,4 +156,28 @@ async function arenaStart(arenaId: number) {
   }));
   if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
   return new Response(`arena sent ${(subs || []).length - dead.length}`, { status: 200 });
+}
+
+// Community: someone replied to you, mentioned you, followed you or quoted your post.
+async function communityNotif(notifId: number) {
+  const { data: n } = await sb.from("community_notifs").select("id,user_id,actor,kind,post_id").eq("id", notifId).maybeSingle();
+  if (!n) return new Response("gone", { status: 200 });
+  const [{ data: actor }, { data: post }, { data: subs }] = await Promise.all([
+    sb.from("profiles").select("name").eq("id", n.actor).maybeSingle(),
+    n.post_id ? sb.from("posts").select("id,body,root_id").eq("id", n.post_id).maybeSingle() : Promise.resolve({ data: null }),
+    sb.from("push_subscriptions").select("endpoint,p256dh,auth").eq("user_id", n.user_id),
+  ]);
+  if (!subs?.length) return new Response("no devices", { status: 200 });
+  const name = actor?.name || "شخص";
+  const title = { reply: `💬 ${name} رد عليك`, mention: `📣 ${name} منشنك`, follow: `👤 ${name} صار يتابعك`, quote: `✍️ ${name} اقتبس منشورك` }[n.kind as string] || `🌍 ${name}`;
+  const text = post?.body ? (post.body.length > 140 ? post.body.slice(0, 139) + "…" : post.body) : n.kind === "follow" ? "شوف صفحته في المجتمع" : "افتح المجتمع";
+  const url = n.kind === "follow" ? `./?view=community&user=${n.actor}` : `./?view=community&post=${n.post_id}`;
+  const payload = JSON.stringify({ title, body: text, url, tag: `cm-${n.id}` });
+  const dead: string[] = [];
+  await Promise.all(subs.map(async (s) => {
+    try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 3600 }); }
+    catch (e) { const c = (e as { statusCode?: number }).statusCode; if (c === 404 || c === 410) dead.push(s.endpoint); }
+  }));
+  if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
+  return new Response(`community sent ${subs.length - dead.length}`, { status: 200 });
 }
