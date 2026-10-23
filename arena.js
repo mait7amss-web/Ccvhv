@@ -272,6 +272,16 @@ function drawArenaRoom(a) {
     const share = el("button", "ghost", "📤 ادعُ الشلة"); share.type = "button"; share.onclick = () => arenaShare(a);
     acts.append(share);
     if (mySeat) { const lv = el("button", "ghost", "انسحب"); lv.type = "button"; lv.onclick = () => arenaLeave(a); acts.append(lv); }
+    if (a.created_by === me.id && !a.private) {
+      const pv = el("button", "ghost", "🔒 خلّه خاص (بكود)"); pv.type = "button";
+      pv.onclick = async () => {
+        pv.disabled = true;
+        const { data, error } = await sb.rpc("arena_make_private", { a: a.id });
+        if (error || !data) { toast("ما قدرنا نحوّله. يمكن بدأ النقاش."); pv.disabled = false; return; }
+        a.private = true; a.invite_code = data; toast(`🔒 صار خاص. الكود: ${data}`); drawArena();
+      };
+      acts.append(pv);
+    }
     if (a.created_by === me.id || isAdmin) { const del = el("button", "ghost danger", "احذف النقاش"); del.type = "button"; del.onclick = () => arenaDelete(a); acts.append(del); }
     box.append(acts);
   } else if (isAdmin) {

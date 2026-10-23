@@ -141,3 +141,26 @@ $$;
 
 grant execute on function public.arena_create(text, text, text, text, smallint, boolean), public.arena_by_code(text),
   public.arena_invite(bigint, uuid), public.arena_visible(bigint) to authenticated;
+
+-- صاحب النقاش يحوّله لخاص قبل البداية (ويطلع له كود)
+create or replace function public.arena_make_private(a bigint)
+returns text language plpgsql security definer set search_path = public as $$
+declare ar public.arenas; code text;
+begin
+  select * into ar from public.arenas where id = a for update;
+  if not found or ar.created_by <> auth.uid() then raise exception 'not allowed'; end if;
+  if ar.starts_at is not null then raise exception 'started'; end if;
+  if ar.invite_code is not null then
+    update public.arenas set private = true where id = a;
+    return ar.invite_code;
+  end if;
+  loop
+    code := upper(substr(translate(md5(random()::text || clock_timestamp()::text), '01', ''), 1, 6));
+    exit when char_length(code) = 6 and not exists (select 1 from public.arenas where invite_code = code);
+  end loop;
+  update public.arenas set private = true, invite_code = code where id = a;
+  -- اللي جالسين فيه يبقون يشوفونه
+  return code;
+end;
+$$;
+grant execute on function public.arena_make_private(bigint) to authenticated;
