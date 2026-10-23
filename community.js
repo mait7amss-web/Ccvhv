@@ -603,6 +603,11 @@ function repostSheet(p) {
   });
 }
 function cmShare(p) {
+  // Analysis videos go out as the video itself (with the app logo), not a link
+  if (p.video_path && typeof svSharePosted === "function") return svSharePosted(p);
+  cmShareLink(p);
+}
+function cmShareLink(p) {
   const url = location.origin + location.pathname + `?view=community&post=${p.id}`;
   const text = `${nameOf(p.user_id)} في مدرج هلا: ${(p.body || "").slice(0, 120)}`;
   if (navigator.share) navigator.share({ title: "مدرج هلا", text, url }).catch(() => {});
@@ -622,8 +627,8 @@ async function cmToggleFollow(uid, btn) {
 function postMenu(p) {
   openSheet("خيارات المنشور", (s) => {
     const add = (label, fn, cls) => { const b = el("button", "ghost cm-wide " + (cls || ""), label); b.type = "button"; b.onclick = fn; s.append(b); };
-    add("📤 شارك المنشور", () => { closeSheet(); cmShare(p); });
-    if (p.video_path) add("⬇️ احفظ الفيديو (لتيك توك وانستقرام)", () => { closeSheet(); svDownloadPosted(p); });
+    if (p.video_path) add("🎬 شارك الفيديو (انستقرام، تيك توك، واتساب)", () => { closeSheet(); svSharePosted(p); });
+    add(p.video_path ? "🔗 شارك رابط المنشور" : "📤 شارك المنشور", () => { closeSheet(); cmShareLink(p); });
     if (p.user_id === me.id || isAdmin) add("🗑️ احذف المنشور", () => cmDelete(p), "danger");
     if (p.user_id !== me.id) {
       add("🚩 بلّغ عن المنشور", () => cmReport(p));

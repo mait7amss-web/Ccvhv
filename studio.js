@@ -15,6 +15,16 @@ const svHex = (c) => { const n = parseInt(c.slice(1), 16); return [n >> 16, (n >
 const svNear = (a, b) => { const x = svHex(a), y = svHex(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < 110; };
 
 let sv = null;   // the open studio
+// The app logo, drawn into every video (same origin, so the canvas stays recordable)
+const SV_LOGO = new Image(); SV_LOGO.src = "icon-512.png";
+function svLogo(c, x, y, size) {
+  c.save();
+  c.beginPath(); c.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2); c.closePath();
+  if (SV_LOGO.complete && SV_LOGO.naturalWidth) { c.clip(); c.drawImage(SV_LOGO, x, y, size, size); }
+  else { c.fillStyle = "#2fbf5b"; c.fill(); }
+  c.restore();
+  c.strokeStyle = "#2fbf5b"; c.lineWidth = 3; c.beginPath(); c.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2); c.stroke();
+}
 
 function svDefaultTeam(f, top) {
   return formationPlayers(f).map((p) => top
@@ -246,8 +256,8 @@ function svDraw() {
   }
   c.fillText(svFit(c, sub, SV_W - 150), SV_W - 28, 108);
   // brand badge (left)
-  c.fillStyle = "#2fbf5b"; c.beginPath(); c.arc(70, 76, 44, 0, Math.PI * 2); c.fill();
-  c.fillStyle = "#04150a"; c.font = `400 34px Lalezar, Cairo, sans-serif`; c.textAlign = "center"; c.fillText("هلا", 70, 88);
+  svLogo(c, 26, 24, 96);
+  c.fillStyle = "#2fbf5b"; c.font = `400 24px Lalezar, Cairo, sans-serif`; c.textAlign = "center"; c.direction = "rtl"; c.fillText("مدرج هلا", 74, 146);
   // pitch
   const P = SV_PITCH;
   for (let i = 0; i < 7; i++) { c.fillStyle = i % 2 ? "#2a7d3c" : "#2f8a43"; c.fillRect(P.x, P.y + i * P.h / 7, P.w, P.h / 7 + 1); }
@@ -314,14 +324,17 @@ function svDraw() {
   c.direction = "rtl"; c.textAlign = "right"; c.fillStyle = "#cfe0d4"; c.font = svFont(700, 26);
   const who = people[me.id]?.username ? "@" + people[me.id].username : nameOf(me.id);
   c.fillText(`🎙️ ${who}`, SV_W - 28, 1246);
-  c.textAlign = "left"; c.direction = "ltr"; c.fillStyle = "#2fbf5b"; c.font = `400 30px Lalezar, Cairo, sans-serif`;
-  c.fillText("مدرج هلا", 28, 1248);
+  svLogo(c, 26, 1210, 52);
+  c.textAlign = "left"; c.direction = "ltr"; c.fillStyle = "#2fbf5b"; c.font = `400 32px Lalezar, Cairo, sans-serif`;
+  c.fillText("مدرج هلا", 90, 1248);
+  // small watermark on the pitch corner, so even a cropped clip carries the logo
+  c.globalAlpha = 0.55; svLogo(c, SV_PITCH.x + SV_PITCH.w - 58, SV_PITCH.y + 12, 46); c.globalAlpha = 1;
 }
 function svFit(c, t, w) { if (c.measureText(t).width <= w) return t; while (t.length > 1 && c.measureText(t + "…").width > w) t = t.slice(0, -1); return t + "…"; }
 
 /* ---------- recording ---------- */
 function svPickVideoMime() {
-  for (const t of ['video/mp4;codecs="avc1.42E01E,mp4a.40.2"', "video/mp4;codecs=avc1,mp4a", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]) {
+  for (const t of ['video/mp4;codecs="avc1.42E01E,mp4a.40.2"', "video/mp4;codecs=avc1,mp4a.40.2", "video/mp4;codecs=avc3,mp4a.40.2", "video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]) {
     if (MediaRecorder.isTypeSupported?.(t)) return t;
   }
   return "";
@@ -434,22 +447,50 @@ function svPreview(blob, type, poster, secs) {
 async function svShareFile(blob, name, type, title) {
   const file = new File([blob], name, { type });
   if (navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: title || "تحليل من مدرج هلا", text: "تحليلي في مدرج هلا ⚽🎙️" }); return; } catch (e) { if (e?.name === "AbortError") return; }
+    try { await navigator.share({ files: [file] }); return; } catch (e) { if (e?.name === "AbortError") return; }
   }
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   toast("⬇️ انحفظ الفيديو");
 }
-// Save someone's posted video (public) to share it outside
-async function svDownloadPosted(p) {
-  toast("يحمّل الفيديو…");
-  try {
-    const r = await fetch(videoUrl(p.video_path));
-    const blob = await r.blob();
+// Share a posted video as a video file (Instagram, TikTok, WhatsApp…). Phones only allow sharing right
+// after a tap, so we download it first, then the share button is a fresh tap.
+const svBlobs = {};
+function svSharePosted(p) {
+  openSheet("📤 شارك التحليل كفيديو", async (s) => {
+    const note = el("p", "sheet-p", "⏳ يجهّز الفيديو…"); s.append(note);
+    const acts = el("div", "sv-share"); s.append(acts);
+    const link = el("button", "link", "🔗 أو شارك رابط المنشور بس"); link.type = "button";
+    link.onclick = () => { closeSheet(); cmShareLink(p); };
+    const c = el("button", "cancel", "إلغاء"); c.type = "button"; c.onclick = closeSheet;
+    s.append(link, c);
+    let blob = svBlobs[p.video_path];
+    try {
+      if (!blob) {
+        const r = await fetch(videoUrl(p.video_path));
+        if (!r.ok) throw new Error(String(r.status));
+        blob = svBlobs[p.video_path] = await r.blob();
+      }
+    } catch { note.textContent = "ما قدرنا نحمّل الفيديو. تأكد من الاتصال وجرّب."; return; }
     const ext = p.video_path.split(".").pop();
-    await svShareFile(blob, `madraj-hala.${ext}`, blob.type || "video/mp4", p.body || "");
-  } catch { toast("ما قدرنا نحمّل الفيديو."); }
+    const type = blob.type && blob.type !== "application/octet-stream" ? blob.type : ext === "webm" ? "video/webm" : "video/mp4";
+    const file = new File([blob], `madraj-hala.${ext}`, { type });
+    const canShare = !!navigator.canShare?.({ files: [file] });
+    note.textContent = canShare ? "✅ جاهز! اضغط شارك واختر انستقرام (ستوري أو ريلز) أو تيك توك أو واتساب." : "✅ جاهز! احفظه في جوالك وبعدين ارفعه في انستقرام.";
+    if (ext === "webm") note.textContent += " (ملاحظة: هالفيديو تسجّل بصيغة WebM، وانستقرام ممكن ما يقبلها.)";
+    if (canShare) {
+      const sh = el("button", "primary cm-wide", "📤 شارك الفيديو"); sh.type = "button";
+      sh.onclick = async () => { try { await navigator.share({ files: [file] }); closeSheet(); } catch (e) { if (e?.name !== "AbortError") toast("ما قدرنا نشارك. جرّب احفظ."); } };
+      acts.append(sh);
+    }
+    const save = el("button", canShare ? "ghost cm-wide" : "primary cm-wide", "⬇️ احفظ في الجوال"); save.type = "button";
+    save.onclick = () => {
+      const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = file.name;
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+    };
+    acts.append(save);
+  });
 }
 
 /* ---------- in a post ---------- */
