@@ -53,7 +53,7 @@ async function showTourStep() {
   const acts = el("div", "tour-acts");
   if (st.final) {
     const notif = el("button", "primary", "🔔 فعّل الإشعارات"); notif.type = "button";
-    notif.onclick = () => { endTour(); openSettings(); toast("انزل لقسم الإشعارات وفعّلها 🔔"); };
+    notif.onclick = async () => { endTour(); await turnOnNotifications(); };
     const go = el("button", "cancel", "يلا نبدأ ⚽"); go.type = "button"; go.onclick = endTour;
     acts.append(notif, go);
   } else {
@@ -83,10 +83,52 @@ async function showTourStep() {
 }
 addEventListener("resize", () => { if (!tourEl.hidden) showTourStep(); });
 
-// New users (and everyone once per TOUR_VERSION) get the tour after the app loads
+/* ---------- 🔔 "Turn on notifications" prompt for anyone who hasn't yet ---------- */
+async function pushIsOn() {
+  if (!pushSupported() || Notification.permission !== "granted") return false;
+  const sub = await currentSub().catch(() => null);
+  return !!sub;
+}
+async function turnOnNotifications() {
+  if (isIOS && !isStandalone()) { openSettings(); toast("على الآيفون: أضف التطبيق للشاشة الرئيسية أول، والخطوات تحت 🔔"); return; }
+  const msg = await enablePush();
+  toast(msg || "✅ تفعّلت الإشعارات: الأهداف والأحداث وكل شي");
+}
+function notifPromptDue() {
+  try { return Date.now() - Number(localStorage.getItem("hala.notifAsk") || 0) > 2 * 86400000; } catch { return false; }
+}
+async function notifPrompt() {
+  if (!notifPromptDue() || await pushIsOn()) return;
+  if (pushSupported() && Notification.permission === "denied") return;
+  try { localStorage.setItem("hala.notifAsk", String(Date.now())); } catch {}
+  openSheet("🔔 لا يفوتك ولا هدف!", (s) => {
+    const ios = isIOS && !isStandalone();
+    s.append(el("p", "sheet-p", "فعّل الإشعارات ويوصلك أول بأول: ⚽ الأهداف، 🟥 الطرد، 📺 الفار، بداية ونهاية المباريات، ولما أحد يرد عليك أو يمنشنك."));
+    if (ios) {
+      s.append(el("p", "sheet-p", "على الآيفون لازم أول تضيف التطبيق للشاشة الرئيسية:"));
+      const ol = el("ol", "steps");
+      for (const t of ["اضغط زر المشاركة ⬆️ تحت في Safari", "اختر Add to Home Screen (إضافة إلى الشاشة الرئيسية)", "افتح مدرج هلا من الأيقونة الجديدة وفعّل الإشعارات"]) ol.append(el("li", null, t));
+      s.append(ol);
+    }
+    const acts = el("div", "acts");
+    if (!ios) {
+      const on = el("button", "primary", "🔔 فعّلها الحين"); on.type = "button";
+      on.onclick = async () => { on.disabled = true; const msg = await enablePush(); closeSheet(); toast(msg || "✅ تفعّلت الإشعارات: الأهداف والأحداث وكل شي"); };
+      acts.append(on);
+    }
+    const later = el("button", "cancel", ios ? "تمام" : "بعدين"); later.type = "button"; later.onclick = closeSheet;
+    acts.append(later); s.append(acts);
+  });
+}
+
+// New users (and everyone once per TOUR_VERSION) get the tour after the app loads;
+// otherwise people without notifications get the prompt.
 const _startChatTour = startChat;
 startChat = async function () {
   const r = await _startChatTour();
-  if (!tourSeen() && !openRoomId && !communityLink) setTimeout(() => { if (me && !$("scroller").hidden) startTour(); }, 1200);
+  setTimeout(() => {
+    if (!me || $("scroller").hidden || openRoomId) return;
+    if (!tourSeen()) startTour(); else notifPrompt();
+  }, 1500);
   return r;
 };

@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 27; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 28; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -1266,6 +1266,25 @@ function b64ToBytes(b64) {
   return Uint8Array.from(raw, c => c.charCodeAt(0));
 }
 
+// Turns on push for this device with everything switched on (all leagues, live alerts,
+// reminders, results). Returns an error message, or null when it worked.
+async function enablePush() {
+  try {
+    if (!pushSupported()) return "هالمتصفح ما يدعم الإشعارات.";
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") return "لازم تسمح بالإشعارات عشان توصلك.";
+    const { data: k } = await sb.from("app_public").select("value").eq("key", "vapid_public").maybeSingle();
+    if (!k?.value) return "الإشعارات للحين ما تجهزت من جهة السيرفر. جرّب بعد شوي.";
+    const reg = await swReady; if (!reg) return "ما قدرنا نشغّل الإشعارات على هالجهاز.";
+    const s2 = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(k.value) });
+    const j = s2.toJSON();
+    const row = { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_id: me.id, leagues: CHANNELS.map(c => c.id), reminders: true, results: true };
+    let { error } = await sb.from("push_subscriptions").upsert({ ...row, live: true }, { onConflict: "endpoint" });
+    if (error) ({ error } = await sb.from("push_subscriptions").upsert(row, { onConflict: "endpoint" }));
+    return error ? "ما انحفظ الاشتراك. جرّب مرة ثانية." : null;
+  } catch { return "صار خطأ. جرّب مرة ثانية."; }
+}
+
 async function renderNotif(box) {
   box.textContent = "";
   box.append(el("h4", null, "🔔 الإشعارات"));
@@ -1282,23 +1301,13 @@ async function renderNotif(box) {
   const sub = await currentSub();
   const { data: row } = sub ? await sb.from("push_subscriptions").select("*").eq("endpoint", sub.endpoint).maybeSingle() : { data: null };
   if (!sub || !row) {
-    box.append(el("p", null, "تذكير قبل المباراة إذا ما توقعت، ونتيجتك أول ما تخلص، ورسايل الدوريات اللي تختارها."));
+    box.append(el("p", null, "الأهداف والطرد والفار أول بأول، تذكير قبل المباراة إذا ما توقعت، ونتيجتك أول ما تخلص."));
     const on = el("button", "primary", "فعّل الإشعارات"); on.type = "button";
     const err = el("div", "err"); err.hidden = true;
     on.onclick = async () => {
       on.disabled = true; err.hidden = true;
-      try {
-        const perm = await Notification.requestPermission();
-        if (perm !== "granted") throw new Error("لازم تسمح بالإشعارات عشان توصلك.");
-        const { data: k } = await sb.from("app_public").select("value").eq("key", "vapid_public").maybeSingle();
-        if (!k?.value) throw new Error("الإشعارات للحين ما تجهزت من جهة السيرفر. جرّب بعد شوي.");
-        const reg = await swReady; if (!reg) throw new Error("ما قدرنا نشغّل الإشعارات على هالجهاز.");
-        const s2 = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(k.value) });
-        const j = s2.toJSON();
-        const { error } = await sb.from("push_subscriptions").upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_id: me.id, leagues: [channel] }, { onConflict: "endpoint" });
-        if (error) throw new Error("ما انحفظ الاشتراك. جرّب مرة ثانية.");
-        renderNotif(box);
-      } catch (e) { err.textContent = e.message || "صار خطأ."; err.hidden = false; on.disabled = false; }
+      const msg = await enablePush();
+      if (msg) { err.textContent = msg; err.hidden = false; on.disabled = false; } else renderNotif(box);
     };
     box.append(on, err);
     return;
