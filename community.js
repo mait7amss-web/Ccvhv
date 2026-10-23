@@ -933,3 +933,52 @@ async function setAvatar(file) {
   if (community) drawCommunity(false);
   return null;
 }
+
+/* ---------- a person's card from anywhere (league chat, match room) ---------- */
+async function profileSheet(uid) {
+  if (!uid || uid === me.id) return;
+  await Promise.all([cmLoadBasics(), loadPeople([uid])]);
+  const { data: c } = await sb.rpc("profile_counts", { u: uid });
+  openSheet("", (s) => {
+    s.querySelector("h3")?.remove();
+    const head = el("div", "cm-prof");
+    const av = avatarEl(uid); av.classList.add("big");
+    const info = el("div", "cm-pinfo");
+    info.append(el("b", null, nameOf(uid)));
+    const pill = teamPill(uid); if (pill) info.append(pill);
+    head.append(av, info);
+    s.append(head);
+    const stats = el("div", "cm-stats");
+    for (const [n, label] of [[c?.posts, "منشور"], [c?.followers, "متابع"], [c?.following, "يتابع"], [c?.takes_right, "رأي صدق ✅"]]) {
+      const x = el("div"); x.append(el("b", null, arNum(n || 0)), el("span", null, label)); stats.append(x);
+    }
+    s.append(stats);
+    const acts = el("div", "acts");
+    const on = cmFollowing.has(uid);
+    const f = el("button", on ? "cancel" : "primary", on ? "تتابعه ✓ (إلغاء المتابعة)" : "➕ تابعه"); f.type = "button";
+    f.onclick = async () => {
+      f.disabled = true;
+      const follow = !cmFollowing.has(uid);
+      const { error } = follow
+        ? await sb.from("follows").insert({ follower: me.id, followee: uid })
+        : await sb.from("follows").delete().eq("follower", me.id).eq("followee", uid);
+      if (error && error.code !== "23505") { toast("ما انحفظ. جرّب مرة ثانية."); f.disabled = false; return; }
+      if (follow) cmFollowing.add(uid); else cmFollowing.delete(uid);
+      delete cmFeeds.following;
+      toast(follow ? `✅ صرت تتابع ${nameOf(uid)}` : `ألغيت متابعة ${nameOf(uid)}`);
+      closeSheet(); profileSheet(uid);
+    };
+    acts.append(f);
+    s.append(acts);
+    const page = el("button", "ghost cm-wide", "🌍 شوف منشوراته في المجتمع"); page.type = "button";
+    page.onclick = () => {
+      closeSheet();
+      if (typeof roomMatch !== "undefined" && roomMatch) leaveRoom();
+      setCommunity(true); cmStack = [{ kind: "user", id: uid }]; renderLeagues(); refreshView(true);
+    };
+    const bl = el("button", "link danger", "🚫 حظر " + nameOf(uid)); bl.type = "button";
+    bl.onclick = () => { closeSheet(); blockSheet(uid); };
+    const close = el("button", "cancel", "سكّر"); close.type = "button"; close.onclick = closeSheet;
+    s.append(page, bl, close);
+  });
+}

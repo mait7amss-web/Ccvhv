@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 22; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 23; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -510,6 +510,8 @@ function messageRow(m, cont) {
     const w = el("div", "who", nameOf(m.user_id));
     w.style.color = TEAM_BY_ID[people[m.user_id]?.team]?.color || colorFor(m.user_id);
     const tp = teamPill(m.user_id); if (tp) w.append(tp);
+    w.style.cursor = "pointer";
+    w.onclick = (e) => { e.stopPropagation(); profileSheet(m.user_id); };
     b.append(w);
   }
   const src = m.localUrl || signed[m.image_path]?.url;
@@ -586,7 +588,9 @@ function messageRow(m, cont) {
     if (m.hidden && isAdmin) acts.append(el("span", "hidden-tag", "مخفية عن الناس"));
     if (acts.childNodes.length) wrap.append(acts);
   }
-  row.append(avatarEl(m.user_id), wrap);
+  const av = avatarEl(m.user_id);
+  if (!mine) { av.style.cursor = "pointer"; av.onclick = (e) => { e.stopPropagation(); profileSheet(m.user_id); }; }
+  row.append(av, wrap);
   return row;
 }
 
