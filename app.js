@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 26; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 27; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -1316,8 +1316,11 @@ async function renderNotif(box) {
     i.onchange = () => save({ [key]: i.checked }, i);
     l.append(el("span", null, label), i); return l;
   };
-  box.append(toggle("⏰ تذكير قبل المباراة بساعة إذا ما توقعت", "reminders"), toggle("⚽ النتيجة ونقاطك", "results"));
-  box.append(el("p", null, "💬 رسايل جديدة من:"));
+  box.append(
+    toggle("⚽ أهداف وأحداث المباريات أول بأول (هدف، طرد، فار، بداية ونهاية)", "live"),
+    toggle("⏰ تذكير قبل المباراة بساعة إذا ما توقعت", "reminders"),
+    toggle("🏁 النتيجة ونقاطك", "results"));
+  box.append(el("p", null, "🏟️ الأحداث المباشرة من مباريات:"));
   const grid = el("div", "lgs");
   for (const c of CHANNELS) {
     const l = el("label"); const i = el("input"); i.type = "checkbox"; i.id = "n-lg-" + c.id; i.checked = row.leagues.includes(c.id);

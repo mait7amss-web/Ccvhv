@@ -104,10 +104,14 @@ Deno.serve(async (req) => {
   return new Response(`sent ${subs.size - dead.length}`, { status: 200 });
 });
 
-// Crowd-confirmed goal or "the stadium exploded" moment: tell people who predicted the match
-// or were in its room recently, but not those active in the room in the last 2 minutes (they saw it).
+// Crowd-confirmed or official goals, "the stadium exploded" moments, and live match moments
+// (red card, VAR, kickoff, half time, full time).
+const VAR_AR: Record<string, string> = {
+  "Goal cancelled": "إلغاء هدف", "Goal Disallowed - offside": "إلغاء هدف بداعي التسلل", "Goal Disallowed - foul": "إلغاء هدف بسبب خطأ",
+  "Penalty confirmed": "احتساب ضربة جزاء", "Penalty cancelled": "إلغاء ضربة جزاء", "Card upgrade": "تحويل الكرت لأحمر", "Goal confirmed": "تأكيد الهدف",
+};
 async function crowdEvent(eventId: number) {
-  let { data: ev, error: evErr } = await sb.from("crowd_events").select("id,match_id,kind,side,emoji,minute,scorer").eq("id", eventId).maybeSingle();
+  let { data: ev, error: evErr } = await sb.from("crowd_events").select("id,match_id,kind,side,emoji,minute,scorer,detail").eq("id", eventId).maybeSingle();
   if (evErr) ({ data: ev } = await sb.from("crowd_events").select("id,match_id,kind,side,emoji,minute").eq("id", eventId).maybeSingle());
   if (!ev) return new Response("gone", { status: 200 });
   let { data: m, error: mErr } = await sb.from("matches").select("id,channel,home,away,live_home,live_away").eq("id", ev.match_id).maybeSingle();
@@ -119,30 +123,51 @@ async function crowdEvent(eventId: number) {
     if (off?.length) return new Response("official already sent", { status: 200 });
   }
   const since = (min: number) => new Date(Date.now() - min * 60000).toISOString();
-  const [{ data: preds }, { data: r30 }, { data: mo30 }, { data: r2 }, { data: rep2 }] = await Promise.all([
-    sb.from("predictions").select("user_id").eq("match_id", m.id),
-    sb.from("live_reactions").select("user_id").eq("match_id", m.id).gte("created_at", since(40)),
-    sb.from("momentum").select("user_id").eq("match_id", m.id).gte("updated_at", since(40)),
-    sb.from("live_reactions").select("user_id").eq("match_id", m.id).gte("created_at", since(2)),
-    sb.from("live_reports").select("user_id").eq("match_id", m.id).gte("created_at", since(3)),
-  ]);
-  const watching = new Set([...(r2 || []), ...(rep2 || [])].map((x) => x.user_id));
-  const users = new Set([...(preds || []), ...(r30 || []), ...(mo30 || [])].map((x) => x.user_id).filter((u) => !watching.has(u)));
+  const users = new Set<string>();
+  // People who switched on live alerts for this league
+  const { data: liveSubs, error: lsErr } = await sb.from("push_subscriptions").select("user_id").eq("live", true).contains("leagues", [m.channel]);
+  if (!lsErr) for (const x of liveSubs || []) users.add(x.user_id);
+  // Goals and big moments also reach people who predicted the match or were in its room
+  if (["goal", "official", "moment"].includes(ev.kind)) {
+    const [{ data: preds }, { data: r30 }, { data: mo30 }] = await Promise.all([
+      sb.from("predictions").select("user_id").eq("match_id", m.id),
+      sb.from("live_reactions").select("user_id").eq("match_id", m.id).gte("created_at", since(40)),
+      sb.from("momentum").select("user_id").eq("match_id", m.id).gte("updated_at", since(40)),
+    ]);
+    for (const x of [...(preds || []), ...(r30 || []), ...(mo30 || [])]) users.add(x.user_id);
+    // ...except people active in the room right now (they saw it)
+    const [{ data: r2 }, { data: rep2 }] = await Promise.all([
+      sb.from("live_reactions").select("user_id").eq("match_id", m.id).gte("created_at", since(2)),
+      sb.from("live_reports").select("user_id").eq("match_id", m.id).gte("created_at", since(3)),
+    ]);
+    for (const x of [...(r2 || []), ...(rep2 || [])]) users.delete(x.user_id);
+  }
   if (!users.size) return new Response("no one to tell", { status: 200 });
   const { data: subs } = await sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").in("user_id", [...users]);
   const team = ev.side === "home" ? m.home : m.away;
-  const payload = JSON.stringify(ev.kind === "official"
-    ? { title: `⚽ جوووول ${team}!`, body: `${m.home} ${m.live_home ?? ""} - ${m.live_away ?? ""} ${m.away}${ev.minute ? ` · د ${ev.minute}'` : ""}${ev.scorer ? ` · ${ev.scorer}` : ""}`, url: `./?league=${m.channel}&view=pred`, tag: `crowd-${m.id}` }
-    : ev.kind === "goal"
-    ? { title: `⚽ جوول لـ${team}! (حسب المدرج)`, body: `${m.home} × ${m.away}${ev.minute ? ` · د ${ev.minute}'` : ""} · ادخل الغرفة وشوف ردة فعل الجمهور`, url: `./?league=${m.channel}&view=pred`, tag: `crowd-${m.id}` }
-    : { title: `💥 المدرج انفجر! ${ev.emoji || "🔥"}`, body: `شي كبير صار في ${m.home} × ${m.away}. ادخل الغرفة`, url: `./?league=${m.channel}&view=pred`, tag: `crowd-${m.id}` });
+  const score = `${m.home} ${m.live_home ?? ""} - ${m.live_away ?? ""} ${m.away}`;
+  const min = ev.minute ? ` · د ${ev.minute}'` : "";
+  const room = `./?league=${m.channel}&view=chat&room=${m.id}`;
+  const tag = `crowd-${m.id}`;
+  const p = ({
+    official: { title: `⚽ جوووول ${team}!`, body: `${score}${min}${ev.scorer ? ` · ${ev.scorer}` : ""}`, url: room, tag },
+    goal: { title: `⚽ جوول لـ${team}! (حسب المدرج)`, body: `${m.home} × ${m.away}${min} · ادخل الغرفة وشوف ردة فعل الجمهور`, url: room, tag },
+    moment: { title: `💥 المدرج انفجر! ${ev.emoji || "🔥"}`, body: `شي كبير صار في ${m.home} × ${m.away}. ادخل الغرفة`, url: room, tag },
+    red: { title: `🟥 طرد! ${ev.scorer || ""} (${team})`, body: `${score}${min}`, url: room, tag: `ev-${ev.id}` },
+    var: { title: `📺 الفار: ${VAR_AR[ev.detail] || ev.detail || "مراجعة"}`, body: `${team}${ev.scorer ? ` · ${ev.scorer}` : ""} · ${score}${min}`, url: room, tag: `ev-${ev.id}` },
+    kickoff: { title: `🟢 بدأت: ${m.home} × ${m.away}`, body: "الغرفة مفتوحة، ادخل وتابع مع المدرج", url: room, tag },
+    ht: { title: `⏸️ استراحة: ${score}`, body: "وش رايكم في الشوط الأول؟ الغرفة مفتوحة", url: room, tag },
+    ft: { title: `🏁 انتهت: ${score}`, body: "شوف الإحصائيات وقيّم اللاعبين", url: `./?league=${m.channel}&view=pred`, tag },
+  } as Record<string, { title: string; body: string; url: string; tag: string }>)[ev.kind];
+  if (!p) return new Response("unknown kind", { status: 200 });
+  const payload = JSON.stringify(p);
   const dead: string[] = [];
   await Promise.all((subs || []).map(async (s) => {
     try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 600 }); }
     catch (e) { const c = (e as { statusCode?: number }).statusCode; if (c === 404 || c === 410) dead.push(s.endpoint); }
   }));
   if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
-  return new Response(`crowd sent ${(subs || []).length - dead.length}`, { status: 200 });
+  return new Response(`${ev.kind} sent ${(subs || []).length - dead.length}`, { status: 200 });
 }
 
 // A structured debate filled its six seats: tell the debaters it starts in two minutes.

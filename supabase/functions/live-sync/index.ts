@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
 
   const now = Date.now();
   const { data: rows } = await sb.from("matches")
-    .select("id,channel,home,away,kickoff,status,api_fixture_id,live_home,live_away,lineups,live_at")
+    .select("id,channel,home,away,kickoff,status,api_fixture_id,live_home,live_away,lineups,live_at,events")
     .not("api_fixture_id", "is", null)
     .gt("kickoff", new Date(now - 170 * MIN).toISOString())
     .lt("kickoff", new Date(now + 70 * MIN).toISOString());
@@ -95,6 +95,24 @@ Deno.serve(async (req) => {
       }
       await sb.from("matches").update(patch).eq("id", m.id);
       updated++;
+
+      // Match moments → push to people who turned on live alerts for this league (only once we've
+      // seen the match before, so a late first sync doesn't send a burst).
+      if (m.live_at) {
+        const alerts: Record<string, unknown>[] = [];
+        const was = m.status, now2 = patch.status as string | undefined;
+        if (short === "1H" && was !== "IN_PLAY" && (fx.fixture?.status?.elapsed ?? 99) <= 10) alerts.push({ kind: "kickoff" });
+        if (now2 === "PAUSED" && was !== "PAUSED") alerts.push({ kind: "ht" });
+        if (now2 === "FINISHED" && was !== "FINISHED") alerts.push({ kind: "ft" });
+        const key = (e: Fx) => `${e.min}|${e.type}|${e.detail}|${e.player}`;
+        const seen = new Set((m.events || []).map(key));
+        for (const e of (patch.events as Fx[] | undefined) || []) {
+          if (seen.has(key(e))) continue;
+          if (e.type === "Card" && /red|second yellow/i.test(e.detail || "")) alerts.push({ kind: "red", side: e.side, scorer: e.player, minute: e.min });
+          if (e.type === "Var") alerts.push({ kind: "var", side: e.side, scorer: e.player, minute: e.min, detail: e.detail });
+        }
+        for (const a of alerts) await sb.from("crowd_events").insert({ match_id: m.id, minute: patch.minute ?? null, ...a });
+      }
 
       // Official goals → push (same path as crowd goals). Only when we saw the score before,
       // so joining a match late doesn't send a burst.

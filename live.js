@@ -343,8 +343,16 @@ $("rGoal").onclick = () => {
     const c = el("button", "cancel", "إلغاء"); c.type = "button"; c.onclick = closeSheet; s.append(c);
   });
 };
+const MOMENT_TEXT = (ev, m) => {
+  const team = ev.side === "home" ? m.home : m.away;
+  return ev.kind === "red" ? `🟥 طرد! ${ev.scorer || ""} (${team})`
+    : ev.kind === "var" ? `📺 الفار: ${({ "Goal cancelled": "إلغاء هدف", "Penalty confirmed": "احتساب ضربة جزاء", "Penalty cancelled": "إلغاء ضربة جزاء", "Goal Disallowed - offside": "إلغاء هدف بداعي التسلل" })[ev.detail] || ev.detail || "مراجعة"}`
+    : ev.kind === "kickoff" ? "🟢 بدأت المباراة!" : ev.kind === "ht" ? "⏸️ نهاية الشوط الأول" : ev.kind === "ft" ? "🏁 انتهت المباراة" : null;
+};
 function onCrowdEvent(ev, fresh) {
   if (!roomMatch || ev.match_id !== roomMatch.id) return;
+  const moment = MOMENT_TEXT(ev, roomMatch);
+  if (moment) { if (fresh) { toast(moment); drawRoomHeader(); } return; }
   if (ev.kind === "goal") { crowdGoals[ev.side] = (crowdGoals[ev.side] || 0) + 1; drawRoomHeader(); }
   if (!fresh) return;
   const esc = (x) => String(x ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -365,7 +373,7 @@ function startCrowdWatch() {
   crowdWatch?.unsubscribe();
   crowdWatch = sb.channel("hala-crowd").on("postgres_changes", { event: "INSERT", schema: "public", table: "crowd_events" }, async (p) => {
   const ev = p.new;
-  if (roomMatch?.id === ev.match_id || !me) return;
+  if (roomMatch?.id === ev.match_id || !me || !["goal", "official", "moment"].includes(ev.kind)) return;
   let m = matchCache[ev.match_id];
   if (!m) { const { data } = await sb.from("matches").select("id,channel,home,away,kickoff,status,home_score,away_score").eq("id", ev.match_id).maybeSingle(); m = data; if (m) matchCache[m.id] = m; }
   if (!m) return;
