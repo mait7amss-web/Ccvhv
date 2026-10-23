@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 21; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 22; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -1365,8 +1365,6 @@ $("plusBtn").onclick = () => openSheet("أرسل", (s) => {
   item("📊", "تصويت", "سؤال مع خيارين لين أربعة", () => $("pollBtn").click());
   item("😎", "ملصق أو GIF", "ملصقات الكورة أو بحث GIF", () => $("stickerBtn").click());
   item("🧠", "لوحة تكتيك", "ارسم الخطة والتحركات على الملعب", () => tacticEditor());
-  item("🎥", "حلّل لقطة", "ارسم أسهم ودواير على صورة من المباراة", () => $("telePicker").click());
-  item("🎯", "لو أنت المدرب", "اطرح موقف، والكل يقول وش قراره", () => scenarioComposer());
   item("⚔️", "مناظرة", "سؤال بطرفين، وأقوى حجة تفوز", () => debateComposer());
   s.append(list);
 });
