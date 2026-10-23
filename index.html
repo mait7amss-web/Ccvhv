@@ -636,6 +636,21 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 .rstats { padding: 2px 8px; font-size: 12px; }
 .match.tappable { cursor: pointer; }
 .match.tappable:active { border-color: var(--league); }
+/* ---------- ⭐ التقييم على التشكيلة ---------- */
+.ratepanel { background: var(--card); border: 1px solid var(--league); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.rp-hd { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.rp-hd b { font-size: 15px; }
+.rp-hd span { color: var(--muted); font-size: 12px; }
+.rp-info { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.rp-badge, .subp i { color: #fff; font-weight: 800; font-size: 12px; font-style: normal; border-radius: 6px; padding: 1px 6px; }
+.rp-btns { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; direction: ltr; }
+.rp-b { border: 1px solid var(--line); background: var(--pitch-2); color: var(--chalk); font: 800 13px var(--body); border-radius: 8px; padding: 8px 0; cursor: pointer; }
+.rp-b.on { background: var(--c); border-color: var(--c); color: #fff; }
+.subs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 4px; }
+.subs small { color: var(--muted); }
+.subp { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--pitch-2); color: var(--chalk); font: 700 12.5px var(--body); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.pitch .pl { -webkit-tap-highlight-color: transparent; }
+.sheet-p.note2 { font-size: 12px; }
 </style>
 </head>
 <body data-league="epl">
@@ -747,8 +762,8 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=19"></script>
-<script src="tactics.js?v=19"></script>
-<script src="live.js?v=19"></script><script src="arena.js?v=19"></script><script src="community.js?v=19"></script>
+<script src="app.js?v=20"></script>
+<script src="tactics.js?v=20"></script>
+<script src="live.js?v=20"></script><script src="arena.js?v=20"></script><script src="community.js?v=20"></script>
 </body>
 </html>

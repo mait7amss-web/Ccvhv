@@ -41,11 +41,19 @@ function pitchSvg() {
 // Keep "4-3-3" in left-to-right order inside Arabic text.
 const ltr = (t) => t ? "\u2066" + t + "\u2069" : "";
 const shortName = (n) => { if (!n) return ""; const p = n.trim().split(/\s+/); return (p.length > 1 ? p[p.length - 1] : p[0]).slice(0, 12); };
+// Rating colours like the big score apps: red < 6, orange < 6.5, yellow < 7, green < 8, blue 8+
+const ratingColor = (r) => r >= 8 ? "#1d8cf8" : r >= 7 ? "#21b45a" : r >= 6.5 ? "#c9b21b" : r >= 6 ? "#f08a24" : "#e5484d";
 function drawPlayer(svg, p, color, ink) {
   const g = svgEl("g", { class: "pl", "data-i": p.i ?? "" });
-  g.append(svgEl("circle", { cx: PX(p.x), cy: PY(p.y), r: 3.2, fill: color, stroke: "#fff", "stroke-width": 0.5 }));
-  g.append(svgEl("text", { x: PX(p.x), y: PY(p.y) + 1.15, "text-anchor": "middle", "font-size": 3.1, "font-weight": 800, fill: ink }, String(p.n ?? "")));
-  if (p.label) g.append(svgEl("text", { x: PX(p.x), y: PY(p.y) + 6.3, "text-anchor": "middle", "font-size": 2.6, "font-weight": 700, fill: "#fff", stroke: "rgba(0,0,0,.55)", "stroke-width": 0.5, "paint-order": "stroke" }, shortName(p.label)));
+  const r = p.r || 3.2, fs = p.fs || 2.6;
+  g.append(svgEl("circle", { cx: PX(p.x), cy: PY(p.y), r, fill: color, stroke: "#fff", "stroke-width": 0.5 }));
+  g.append(svgEl("text", { x: PX(p.x), y: PY(p.y) + r * 0.36, "text-anchor": "middle", "font-size": r * 0.97, "font-weight": 800, fill: ink }, String(p.n ?? "")));
+  if (p.label) g.append(svgEl("text", { x: PX(p.x), y: PY(p.y) + r + fs + 0.4, "text-anchor": "middle", "font-size": fs, "font-weight": 700, fill: "#fff", stroke: "rgba(0,0,0,.55)", "stroke-width": 0.5, "paint-order": "stroke" }, shortName(p.label)));
+  if (p.rt) {
+    const bx = PX(p.x) + r * 0.55, by = PY(p.y) - r - 1.2;
+    g.append(svgEl("rect", { x: bx, y: by, width: 5.4, height: 2.9, rx: 0.9, fill: ratingColor(p.rt), stroke: "#fff", "stroke-width": 0.25 }));
+    g.append(svgEl("text", { x: bx + 2.7, y: by + 2.15, "text-anchor": "middle", "font-size": 2.1, "font-weight": 800, fill: "#fff" }, Number(p.rt).toFixed(1)));
+  }
   svg.append(g); return g;
 }
 function drawBoard(svg, st) {
@@ -140,7 +148,7 @@ async function tacticEditor(base, replyToMsg) {
 
     const wrap = el("div", "boardwrap");
     const svg = pitchSvg(); svg.classList.add("edit"); wrap.append(svg); s.append(wrap);
-    s.append(el("p", "sheet-p small", "حرّك اللاعبين بإصبعك، أو اختر أداة وارسم على الملعب. اضغط على المنطقة مرة ثانية تنشال."));
+    s.append(el("p", "sheet-p note2", "حرّك اللاعبين بإصبعك، أو اختر أداة وارسم على الملعب. اضغط على المنطقة مرة ثانية تنشال."));
     const redraw = () => drawBoard(svg, st);
     redraw();
 
@@ -199,6 +207,34 @@ function lineupToBoard(lu, f) {
     list.forEach((p, i) => out.push({ x: Math.round(((i + 0.5) / list.length) * 100), y: Math.round(92 - ((r - 1) / Math.max(1, maxR - 1)) * 70), n: p.number, label: p.name }));
   }
   return out.slice(0, 11);
+}
+
+// Both official lineups on one pitch: home in the bottom half attacking up, away in the top half.
+// Rows come from API-Football's grid ("row:col"), spread from the goal to near the halfway line.
+function lineupBoth(match) {
+  const out = { home: [], away: [] };
+  for (const side of ["home", "away"]) {
+    const t = match.lineups?.[side]; if (!t) continue;
+    const rows = {};
+    for (const p of t.xi || []) { const [r, c] = String(p.grid || "").split(":").map(Number); if (r) (rows[r] ||= []).push({ ...p, c }); }
+    let keys = Object.keys(rows).map(Number).sort((a, b) => a - b);
+    let pts;
+    if (keys.length >= 2) {
+      pts = [];
+      keys.forEach((r, ri) => {
+        const list = rows[r].sort((a, b) => a.c - b.c);
+        const depth = 5 + (ri / (keys.length - 1)) * 39;   // 5 (keeper) → 44 (front line)
+        list.forEach((p, i) => pts.push({ x: ((i + 0.5) / list.length) * 100, depth, n: p.number, label: p.name }));
+      });
+    } else {
+      const f = Object.keys(FORMATIONS).includes(t.formation) ? t.formation : "4-3-3";
+      pts = formationPlayers(f, (t.xi || []).map((p) => p.name)).map((p, i) => ({ x: p.x, depth: 5 + (92 - p.y) / 70 * 39, n: t.xi?.[i]?.number ?? p.n, label: p.label }));
+    }
+    out[side] = pts.slice(0, 11).map((p) => side === "home"
+      ? { x: p.x, y: 100 - (7.5 + (p.depth - 5) * 36.5 / 39), n: p.n, label: p.label, r: 2.7, fs: 2.25 }
+      : { x: 100 - p.x, y: p.depth, n: p.n, label: p.label, r: 2.7, fs: 2.25 });
+  }
+  return out;
 }
 
 function tacticCard(m) {
@@ -582,30 +618,81 @@ async function ratingsSheet(match) {
   });
 }
 
-/* ---------- 6. Official lineup view ---------- */
-function lineupSheet(match) {
+/* ---------- 6. Official lineup view: both teams, ratings on the pitch, tap a player to rate ---------- */
+async function lineupSheet(match) {
+  match = matchCache[match.id] || match;
   const lu = match.lineups;
+  const started = new Date(match.kickoff) <= Date.now();
+  const { data } = started ? await sb.from("player_ratings").select("user_id,side,player,rating").eq("match_id", match.id) : { data: [] };
+  const rows = data || [];
+  const official = (side, name) => (match.players?.[side] || []).find((x) => x.name === name)?.rating || null;
+  const crowd = (side, name) => { const rs = rows.filter((r) => r.side === side && r.player === name && r.rating); return rs.length ? { avg: rs.reduce((t, r) => t + r.rating, 0) / rs.length, n: rs.length } : null; };
   openSheet(`📋 ${match.home} × ${match.away}`, (s) => {
     s.classList.add("wide");
     const svg = pitchSvg();
-    const place = (side) => {
-      const t = lu[side]; if (!t) return;
-      const pts = lineupToBoard(t, Object.keys(FORMATIONS).includes(t.formation) ? t.formation : "4-3-3");
-      for (const p of pts) {
-        // home attacks upward in the bottom half; away mirrored in the top half
-        const y = side === "home" ? 52 + (p.y - 8) * 0.5 : 48 - (p.y - 8) * 0.5;
-        const x = side === "home" ? p.x : 100 - p.x;
-        drawPlayer(svg, { x, y, n: p.n, label: p.label }, side === "home" ? "#1b5fd6" : "#e4202b", "#fff");
+    const wrap = el("div", "boardwrap"); wrap.append(svg); s.append(wrap);
+    const panel = el("div", "ratepanel"); panel.hidden = true; s.append(panel);
+    const both = lineupBoth(match);
+    const draw = () => {
+      svg.querySelectorAll(".pl").forEach((n) => n.remove());
+      for (const side of ["home", "away"]) for (const p of both[side]) {
+        const c = crowd(side, p.label);
+        const g = drawPlayer(svg, { ...p, rt: official(side, p.label) || (c ? c.avg : null) }, side === "home" ? "#1b5fd6" : "#e4202b", "#fff");
+        if (started) { g.style.cursor = "pointer"; g.onclick = () => openRate(side, p.label); }
       }
     };
-    place("home"); place("away");
-    const wrap = el("div", "boardwrap"); wrap.append(svg); s.append(wrap);
+    const openRate = (side, name) => {
+      panel.hidden = false; panel.textContent = "";
+      const off = official(side, name), c = crowd(side, name);
+      const mine = rows.find((r) => r.user_id === me.id && r.side === side && r.player === name)?.rating;
+      const hd = el("div", "rp-hd");
+      hd.append(el("b", null, name), el("span", null, side === "home" ? match.home : match.away));
+      const info = el("div", "rp-info");
+      if (off) { const b = el("span", "rp-badge", Number(off).toFixed(1)); b.style.background = ratingColor(off); info.append(el("span", null, "رسمي"), b); }
+      info.append(el("span", null, c ? `المدرج ${c.avg.toFixed(1)} (${c.n})` : "ما أحد قيّمه من المدرج"));
+      const btns = el("div", "rp-btns");
+      for (let v = 1; v <= 10; v++) {
+        const b = el("button", "rp-b" + (mine === v ? " on" : ""), String(v)); b.type = "button";
+        b.style.setProperty("--c", ratingColor(v));
+        b.onclick = async () => {
+          const row = { match_id: match.id, user_id: me.id, side, player: name, rating: v };
+          const { error } = await sb.from("player_ratings").upsert(row, { onConflict: "match_id,user_id,side,player" });
+          if (error) { toast("ما انحفظ التقييم."); return; }
+          const k = rows.findIndex((x) => x.user_id === me.id && x.side === side && x.player === name);
+          if (k >= 0) rows[k] = row; else rows.push(row);
+          toast(`⭐ قيّمت ${name}: ${v}`);
+          draw(); openRate(side, name);
+        };
+        btns.append(b);
+      }
+      panel.append(hd, info, el("p", "sheet-p note2", "تقييمك من ١ إلى ١٠:"), btns);
+      panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    };
+    draw();
+    if (started) s.append(el("p", "sheet-p note2", "⭐ اضغط على أي لاعب وقيّمه. الرقم فوقه تقييمه الرسمي، أو تقييم المدرج لو ما فيه رسمي."));
+
     for (const side of ["away", "home"]) {
-      const t = lu[side]; if (!t) continue;
+      const t = lu?.[side]; if (!t) continue;
       const box = el("div", "lubox " + side);
       box.append(el("h4", null, `${side === "home" ? match.home : match.away} · ${ltr(t.formation)}`));
       if (t.coach) box.append(el("p", "sheet-p", "المدرب: " + t.coach));
-      if (t.subs?.length) box.append(el("p", "sheet-p", "الاحتياط: " + t.subs.map(p => `${p.number ?? ""} ${p.name}`).join("، ")));
+      // Subs who came on, with ratings, tappable
+      const cameOn = new Set((match.events || []).filter((e) => e.type === "subst" && e.side === side).flatMap((e) => [e.player, e.assist]));
+      const used = (t.subs || []).filter((p) => cameOn.has(p.name));
+      if (used.length) {
+        const list = el("div", "subs");
+        for (const p of used) {
+          const rt = official(side, p.name) || crowd(side, p.name)?.avg;
+          const b = el("button", "subp"); b.type = "button";
+          b.append(el("span", null, `${p.number ?? ""} ${p.name}`));
+          if (rt) { const r = el("i", null, Number(rt).toFixed(1)); r.style.background = ratingColor(rt); b.append(r); }
+          b.onclick = () => openRate(side, p.name);
+          list.append(el("small", null, "🔁 دخل بديل:"), b);
+        }
+        box.append(list);
+      }
+      const bench = (t.subs || []).filter((p) => !cameOn.has(p.name));
+      if (bench.length) box.append(el("p", "sheet-p", "الاحتياط: " + bench.map((p) => `${p.number ?? ""} ${p.name}`).join("، ")));
       s.append(box);
     }
     if (match.events?.length) {
@@ -618,12 +705,14 @@ function lineupSheet(match) {
       }
       s.append(ev);
     }
-    s.append(el("p", "sheet-p small", "التشكيلات والأحداث من API-Football، وتتحدث أول بأول."));
+    s.append(el("p", "sheet-p note2", "التشكيلات والأحداث والتقييم الرسمي من API-Football، وتتحدث أول بأول."));
     const acts = el("div", "acts");
     const tb = el("button", "primary", "🧠 حلّلها في لوحة تكتيك"); tb.type = "button";
     tb.onclick = () => {
-      const t = lu.home; const f = Object.keys(FORMATIONS).includes(t.formation) ? t.formation : "4-3-3";
-      closeSheet(); tacticEditor({ formation: f, players: lineupToBoard(t, f), opp: [], arrows: [], zones: [], title: `${match.home} × ${match.away}` });
+      const f = Object.keys(FORMATIONS).includes(lu.home?.formation) ? lu.home.formation : "4-3-3";
+      const b2 = lineupBoth(match);
+      closeSheet();
+      tacticEditor({ formation: f, players: b2.home, opp: b2.away, arrows: [], zones: [], title: `${match.home} × ${match.away}` });
     };
     const c = el("button", "cancel", "سكّر"); c.type = "button"; c.onclick = closeSheet;
     acts.append(tb, c); s.append(acts);
@@ -685,7 +774,7 @@ function statsSheet(match) {
         }
         body.append(g);
       }
-      body.append(el("p", "sheet-p small", "من API-Football، وتتحدث أول بأول."));
+      body.append(el("p", "sheet-p note2", "من API-Football، وتتحدث أول بأول."));
       const actsEl = s.querySelector(".acts"); if (actsEl) actsEl.before(body); else s.append(body);
     };
     draw();

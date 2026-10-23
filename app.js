@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 19; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 20; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -1090,7 +1090,7 @@ function matchCard(m, preds, started) {
   const tools = el("div", "mrow");
   if (m.lineups) { const b = el("button", "small", "📋 التشكيلة"); b.type = "button"; b.onclick = () => lineupSheet(m); tools.append(b); }
   if (m.stats) { const b = el("button", "small", "📊 الإحصائيات"); b.type = "button"; b.onclick = () => statsSheet(m); tools.append(b); }
-  if (started) { const b = el("button", "small", "⭐ قيّم اللاعبين"); b.type = "button"; b.onclick = () => ratingsSheet(m); tools.append(b); }
+  if (started) { const b = el("button", "small", "⭐ قيّم اللاعبين"); b.type = "button"; b.onclick = () => m.lineups ? lineupSheet(m) : ratingsSheet(m); tools.append(b); }
   if (inLiveWindow(m)) { const b = el("button", "small pri", "🔴 غرفة المباراة"); b.type = "button"; b.onclick = () => enterRoom(m); tools.prepend(b); }
   else if (started && Date.now() - new Date(m.kickoff) < 4 * 86400000) { const b = el("button", "small", "📊 تقرير المدرج"); b.type = "button"; b.onclick = () => matchReport(m); tools.append(b); }
   if (tools.childNodes.length) card.append(tools);
