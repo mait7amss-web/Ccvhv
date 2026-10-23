@@ -1056,11 +1056,11 @@ function cmArenaStrip() {
   (async () => {
     const now = Date.now();
     const { data, error } = await sb.from("arenas").select("id,channel,topic,side_a,side_b,starts_at,created_at,private")
-      .or(`starts_at.is.null,starts_at.gt.${new Date(now - 30 * 60000).toISOString()}`)
+      .or(`starts_at.is.null,starts_at.gt.${new Date(now - 20 * 60000).toISOString()}`)
       .gt("created_at", new Date(now - 24 * 3600000).toISOString())
       .order("created_at", { ascending: false }).limit(15);
     if (error || !data?.length) return;
-    const list = data.filter((a) => !a.private && (!a.starts_at || new Date(a.starts_at).getTime() + 30 * 60000 > now));
+    const list = data.filter((a) => !a.private && (!a.starts_at || new Date(a.starts_at).getTime() + 20 * 60000 > now));
     if (!list.length) return;
     const { data: seats } = await sb.from("arena_seats").select("arena_id").in("arena_id", list.map((a) => a.id));
     const count = {}; for (const x of seats || []) count[x.arena_id] = (count[x.arena_id] || 0) + 1;

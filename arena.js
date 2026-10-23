@@ -1,9 +1,9 @@
-/* ---------- النقاش المنظم: ٣ ضد ٣، دقيقة لكل متكلم، ٣٠ دقيقة ويقفل ----------
-   Turn t (0..29) lasts one minute from starts_at + t min.
+/* ---------- النقاش المنظم: ٣ ضد ٣، ٣٠ ثانية لكل متكلم، ٢٠ دقيقة ويقفل ----------
+   Turn t (0..39) lasts 30 seconds from starts_at + t × 30s.
    Speaker: side t % 2, seat floor(t / 2) % 3  →  A1, B1, A2, B2, A3, B3, A1, ...
    The server (supabase/arena.sql) enforces seats, turns and timing; this file only shows them. */
 
-const AR_TURNS = 30, AR_TURN_MS = 60000, AR_TOTAL_MS = AR_TURNS * AR_TURN_MS;
+const AR_TURNS = 40, AR_TURN_MS = 30000, AR_TOTAL_MS = AR_TURNS * AR_TURN_MS;
 const AR_GRACE_MS = 20000;         // matches the 20 s upload grace in arena_speak
 const AR_STALE_MS = 24 * 3600000;  // waiting debates older than this are hidden
 const arenaLists = {};             // channel -> arenas[] (newest first)
@@ -159,7 +159,7 @@ function drawArena() {
 function drawArenaList() {
   const box = $("arenaView"); box.textContent = "";
   const head = el("div", "pane-head");
-  const ht = el("div"); ht.append(el("h2", null, "🎙️ نقاش منظم"), el("p", null, "٣ ضد ٣ · دقيقة لكل متكلم · ٣٠ دقيقة ويقفل"));
+  const ht = el("div"); ht.append(el("h2", null, "🎙️ نقاش منظم"), el("p", null, "٣ ضد ٣ · ٣٠ ثانية لكل متكلم · ٢٠ دقيقة ويقفل"));
   const add = el("button", "ghost", "+ نقاش جديد"); add.type = "button"; add.onclick = arenaCreateSheet;
   const hb = el("div", "ar-hbtns");
   const codeB = el("button", "ghost", "🔑 عندي كود"); codeB.type = "button"; codeB.onclick = arenaCodeSheet;
@@ -205,7 +205,7 @@ function arMetaText(a) {
   const mine = arSeatOf(a.id, me.id) ? " · أنت فيه" : "";
   return (st.phase === "waiting" ? `${arDigits(seats.length)}/٦ لاعبين`
     : st.phase === "soon" ? `يبدأ بعد ${fmtSecs(st.left / 1000)}`
-    : st.phase === "live" ? `🔴 الدور ${arDigits(st.turn + 1)} من ٣٠ · باقي ${fmtSecs(st.left / 1000)}`
+    : st.phase === "live" ? `🔴 الدور ${arDigits(st.turn + 1)} من ${arDigits(AR_TURNS)} · باقي ${fmtSecs(st.left / 1000)}`
     : "انتهى") + mine;
 }
 
@@ -344,7 +344,7 @@ function startArenaTick() {
       if (arRec) arRecStop(true);
       const seat = arSeatOf(a.id, me.id);
       if (st.phase === "live" && seat && arSpeaker(st.turn).side === seat.side && arSpeaker(st.turn).seat === seat.seat) {
-        toast("🎙️ دورك! عندك دقيقة"); navigator.vibrate?.(200);
+        toast("🎙️ دورك! عندك ٣٠ ثانية"); navigator.vibrate?.(200);
       }
       drawArenaRoom(a);
     }
@@ -357,7 +357,7 @@ function arenaTickUI() {
   const st = arState(a), n = (arenaSeats[a.id] || []).length;
   $("arStatus").textContent = st.phase === "waiting" ? `👥 ${arDigits(n)}/٦ لاعبين · ينتظر يكتمل`
     : st.phase === "soon" ? `⏳ يبدأ بعد ${fmtSecs(st.left / 1000)}`
-    : st.phase === "live" ? `🔴 مباشر · الدور ${arDigits(st.turn + 1)}/٣٠ · باقي ${fmtSecs(st.left / 1000)}`
+    : st.phase === "live" ? `🔴 مباشر · الدور ${arDigits(st.turn + 1)}/${arDigits(AR_TURNS)} · باقي ${fmtSecs(st.left / 1000)}`
     : "🏁 انتهى النقاش";
   if (st.phase === "live") {
     $("arTotalFill") && ($("arTotalFill").style.width = (100 - st.left / AR_TOTAL_MS * 100) + "%");
@@ -474,7 +474,7 @@ function arenaShare(a) {
 }
 function arenaCreateSheet() {
   openSheet("🎙️ نقاش منظم جديد", (s) => {
-    s.append(el("p", "sheet-p", "٣ ضد ٣. كل واحد يتكلم دقيقة بالدور، والنقاش كامل ٣٠ دقيقة ويقفل. بعدها الجمهور يصوّت مين فاز."));
+    s.append(el("p", "sheet-p", "٣ ضد ٣. كل واحد يتكلم ٣٠ ثانية بالدور، والنقاش كامل ٢٠ دقيقة ويقفل. بعدها الجمهور يصوّت مين فاز."));
     const topic = textInput("arTopic", 140); topic.placeholder = "مثال: ميسي أفضل من رونالدو؟";
     const a = textInput("arA", 30, "مع"), b = textInput("arB", 30, "ضد");
     const pick = el("select"); pick.id = "arPick";
