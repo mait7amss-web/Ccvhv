@@ -47,7 +47,36 @@ try {
 } catch (e) {
   console.log("Lineup columns missing (run supabase/tactics.sql):", e.message.slice(0, 200)); process.exit(0);
 }
-if (!matches.length) { console.log("No matches near kickoff"); process.exit(0); }
+
+// Same mapping as supabase/functions/live-sync: one API-Football fixture -> our match columns.
+function fixturePatch(fx) {
+  const homeId = fx.teams?.home?.id;
+  const sideOf = (id) => (id === homeId ? "home" : "away");
+  const patch = { live_at: iso(Date.now()) };
+  const gh = fx.goals?.home, ga = fx.goals?.away;
+  if (Number.isInteger(gh) && Number.isInteger(ga)) { patch.live_home = gh; patch.live_away = ga; }
+  if (Number.isInteger(fx.fixture?.status?.elapsed)) patch.minute = fx.fixture.status.elapsed;
+  if (Array.isArray(fx.events)) patch.events = fx.events.map((e) => ({ min: e.time?.elapsed, extra: e.time?.extra || null, side: sideOf(e.team?.id), type: e.type, detail: e.detail, player: e.player?.name || null, assist: e.assist?.name || null }));
+  if (Array.isArray(fx.lineups) && fx.lineups.length === 2) {
+    const pl = (x) => ({ name: x.player?.name, number: x.player?.number, pos: x.player?.pos, grid: x.player?.grid });
+    const side = (t) => ({ team: t.team?.name, formation: t.formation, coach: t.coach?.name || null, xi: (t.startXI || []).map(pl), subs: (t.substitutes || []).map(pl) });
+    const [h, a] = fx.lineups[0].team?.id === homeId ? [fx.lineups[0], fx.lineups[1]] : [fx.lineups[1], fx.lineups[0]];
+    patch.lineups = { home: side(h), away: side(a), fetched_at: iso(Date.now()) };
+  }
+  if (Array.isArray(fx.statistics) && fx.statistics.length === 2) {
+    const st = { home: {}, away: {} };
+    for (const t of fx.statistics) for (const x of t.statistics || []) st[sideOf(t.team?.id)][x.type] = x.value;
+    patch.stats = st;
+  }
+  if (Array.isArray(fx.players) && fx.players.length) {
+    const all = { home: [], away: [] };
+    for (const t of fx.players) all[sideOf(t.team?.id)] = (t.players || [])
+      .map((x) => ({ name: x.player?.name, rating: Number(x.statistics?.[0]?.games?.rating) || 0, min: x.statistics?.[0]?.games?.minutes || 0 }))
+      .filter((x) => x.rating > 0).sort((a, b) => b.rating - a.rating);
+    patch.players = all;
+  }
+  return patch;
+}
 
 // ---- 1. find API-Football fixture ids ----
 const STOP = new Set(["fc", "cf", "afc", "ac", "as", "sc", "ssc", "club", "de", "calcio", "ss", "rc", "ogc", "sv", "vfb", "vfl", "tsg", "bv", "hsc", "us", "cd", "ud", "rcd", "sd", "ca", "real", "1", "fsv", "and"]);
@@ -67,9 +96,7 @@ async function fixturesFor(channel, day) {
 }
 // Unmatched games far from kickoff are retried every 6 hours only, to save the daily quota.
 const retryNow = process.env.FORCE_MATCH === "1" || (new Date().getUTCHours() % 6 === 0 && new Date().getUTCMinutes() < 30);
-for (const m of matches) {
-  if (m.api_fixture_id) continue;
-  if (new Date(m.kickoff).getTime() - now > 2 * H && !retryNow) continue;
+async function linkFixture(m) {
   const day = m.kickoff.slice(0, 10);
   const list = (await fixturesFor(m.channel, day)).filter((f) => Math.abs(new Date(f.fixture.date) - new Date(m.kickoff)) <= 20 * 60000);
   let best = null, bestScore = -1;
@@ -82,12 +109,36 @@ for (const m of matches) {
     console.log(`matched ${m.home_en} v ${m.away_en} -> ${best.teams.home.name} v ${best.teams.away.name} (${best.fixture.id})`);
   } else console.log(`no fixture match for ${m.home_en} v ${m.away_en}`);
 }
+for (const m of matches) {
+  if (m.api_fixture_id) continue;
+  if (new Date(m.kickoff).getTime() - now > 2 * H && !retryNow) continue;
+  await linkFixture(m);
+}
 
 // ---- 2. save the new fixture ids ----
 for (const m of matches) {
   if (!m._fx) continue;
   await db(`matches?id=eq.${m.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ api_fixture_id: m.api_fixture_id }) });
 }
+
+// ---- 2b. finished matches of the last 7 days that never got live data: fetch it once ----
+// (lineups, events, stats, every player's rating). live_at marks a match as done, found or not.
+let past = [];
+try {
+  past = await db(`matches?select=id,channel,home_en,away_en,kickoff,api_fixture_id&home_score=not.is.null&live_at=is.null&kickoff=gt.${enc(iso(now - 7 * 24 * H))}&kickoff=lt.${enc(iso(now - 2 * H))}&order=kickoff.desc&limit=80`);
+} catch (e) { console.log("backfill skipped:", e.message.slice(0, 120)); }
+for (const m of past) if (!m.api_fixture_id) await linkFixture(m);
+const pastIds = past.filter((m) => m.api_fixture_id).map((m) => m.api_fixture_id);
+const pastByFx = new Map(past.map((m) => [Number(m.api_fixture_id), m]));
+for (let i = 0; i < pastIds.length; i += 20) {
+  for (const fx of await api(`fixtures?ids=${pastIds.slice(i, i + 20).join("-")}`)) {
+    const m = pastByFx.get(Number(fx.fixture?.id)); if (!m) continue;
+    await db(`matches?id=eq.${m.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ api_fixture_id: m.api_fixture_id, ...fixturePatch(fx) }) });
+    m._done = true;
+  }
+}
+for (const m of past) if (!m._done) await db(`matches?id=eq.${m.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ live_at: iso(now) }) });
+if (past.length) console.log(`Backfilled ${past.filter((m) => m._done).length} of ${past.length} finished matches`);
 console.log(`API-Football calls this run: ${apiCalls}`);
 
 // ---- 3. "lineup is out" notifications ----

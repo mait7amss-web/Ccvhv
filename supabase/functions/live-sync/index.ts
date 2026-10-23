@@ -1,4 +1,4 @@
-// Live score, minute, events, lineups, stats and player ratings from API-Football.
+// Live score, minute, events, lineups, stats and every player's rating from API-Football.
 // Called every minute by pg_cron (supabase/livefeed.sql). It only calls the provider when a
 // match with a known API-Football id is near or in play, and paces itself to the plan:
 // on the free plan (100 calls/day) every 15 minutes during play, on paid plans every minute.
@@ -87,9 +87,9 @@ Deno.serve(async (req) => {
         const best: Record<string, unknown[]> = { home: [], away: [] };
         for (const t of fx.players) {
           best[sideOf(t.team?.id)] = (t.players || [])
-            .map((x: Fx) => ({ name: x.player?.name, rating: Number(x.statistics?.[0]?.games?.rating) || 0 }))
+            .map((x: Fx) => ({ name: x.player?.name, rating: Number(x.statistics?.[0]?.games?.rating) || 0, min: x.statistics?.[0]?.games?.minutes || 0 }))
             .filter((x: { rating: number }) => x.rating > 0)
-            .sort((a: { rating: number }, b: { rating: number }) => b.rating - a.rating).slice(0, 3);
+            .sort((a: { rating: number }, b: { rating: number }) => b.rating - a.rating);
         }
         patch.players = best;
       }

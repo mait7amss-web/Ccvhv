@@ -553,7 +553,8 @@ async function ratingsSheet(match) {
       for (const a of agg.sort((x, y) => (y.avg ?? -1) - (x.avg ?? -1))) {
         const mineR = rows.find(r => r.user_id === me.id && r.side === side && r.player === a.p)?.rating;
         const r = el("div", "rrow");
-        const name = el("div", "rname"); name.append(el("b", null, a.p), el("small", null, a.avg != null ? `المدرج ${a.avg.toFixed(1)} · ${a.n} تقييم` : "ما أحد قيّمه"));
+        const off = (match.players?.[side] || []).find(x => x.name === a.p)?.rating;
+        const name = el("div", "rname"); name.append(el("b", null, a.p), el("small", null, (off ? `رسمي ${Number(off).toFixed(1)} · ` : "") + (a.avg != null ? `المدرج ${a.avg.toFixed(1)} · ${a.n} تقييم` : "ما أحد قيّمه من المدرج")));
         const sel = el("select", "rsel"); sel.setAttribute("aria-label", "تقييمك لـ " + a.p);
         sel.append(new Option("قيّم", ""));
         for (let i = 10; i >= 1; i--) sel.append(new Option(String(i), String(i)));
@@ -679,7 +680,7 @@ function statsSheet(match) {
         const g = el("div", "stgoals");
         for (const side of ["home", "away"]) {
           const col = el("div", side);
-          for (const p of best[side] || []) col.append(el("div", null, `${p.name} · ${Number(p.rating).toFixed(1)}`));
+          for (const p of (best[side] || []).slice(0, 3)) col.append(el("div", null, `${p.name} · ${Number(p.rating).toFixed(1)}`));
           g.append(col);
         }
         body.append(g);
