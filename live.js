@@ -451,12 +451,54 @@ async function matchReport(m) {
 }
 
 /* ---------- Daily streak and fan level ---------- */
-const LEVELS = [[0, "مشجع جديد"], [100, "مشجع"], [300, "مشجع وفي"], [700, "محلل"], [1500, "خبير"], [3000, "أسطورة المدرج"]];
+// [points needed, name, icon, colour]
+const LEVELS = [
+  [0, "مشجع جديد", "🌱", "#5f7a68"], [100, "مشجع", "🎟️", "#3b8f5a"], [300, "مشجع وفي", "📣", "#2fa37a"],
+  [600, "ألتراس", "🧣", "#2f8fd6"], [1000, "محلل", "📋", "#5a6be0"], [1600, "خبير تكتيك", "🧠", "#8f3fd6"],
+  [2500, "قائد المدرج", "🎖️", "#c2477e"], [4000, "نجم المدرج", "💎", "#d9822b"], [6000, "أسطورة", "🏆", "#d4a017"],
+  [9000, "أسطورة المدرج", "👑", "#e3c84a"],
+];
+const lvNum = (n) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]);
+// Level chip next to a name; tap it to see every level and what it takes
+function levelBadge(id) {
+  const xp = id === me?.id && myStats ? myStats.xp : people[id]?.xp;
+  if (xp == null) return null;
+  const lv = levelOf(xp), L = LEVELS[lv.idx];
+  const b = el("button", "lvb", `${L[2]} ${lvNum(lv.idx + 1)}`); b.type = "button";
+  b.style.setProperty("--lc", L[3]); b.title = L[1];
+  b.onclick = (e) => { e.stopPropagation(); levelsSheet(id); };
+  return b;
+}
+function levelsSheet(id) {
+  const xp = (id === me?.id && myStats ? myStats.xp : people[id]?.xp) || 0;
+  const lv = levelOf(xp), mine = id === me?.id;
+  openSheet("🏅 المستويات", (s) => {
+    const top = el("div", "lv-top");
+    top.append(avatarEl(id));
+    const t = el("div"); t.append(el("b", null, `${mine ? "مستواك" : "مستوى " + nameOf(id)}: ${LEVELS[lv.idx][2]} ${LEVELS[lv.idx][1]}`), el("span", null, `${lvNum(xp)} نقطة` + (lv.next ? ` · باقي ${lvNum(lv.next - xp)} للمستوى الجاي` : " · أعلى مستوى 👑")));
+    top.append(t); s.append(top);
+    if (lv.next) { const bar = el("div", "xpbar"); const f = el("span"); f.style.width = Math.round((xp - lv.base) / (lv.next - lv.base) * 100) + "%"; bar.append(f); s.append(bar); }
+    const list = el("div", "lv-list");
+    LEVELS.forEach(([need, name, icon, color], i) => {
+      const r = el("div", "lv-row" + (i === lv.idx ? " now" : i < lv.idx ? " done" : ""));
+      r.style.setProperty("--lc", color);
+      r.append(el("span", "lv-ic", icon), el("span", "lv-n", `${lvNum(i + 1)}. ${name}`),
+        el("span", "lv-p", i <= lv.idx ? (i === lv.idx ? (mine ? "أنت هنا" : "هنا") : "✓") : `${lvNum(need)} نقطة` + (i === lv.idx + 1 ? ` (باقي ${lvNum(need - xp)})` : "")));
+      list.append(r);
+    });
+    s.append(list);
+    const how = el("details", "lg-how");
+    how.append(el("summary", null, "📖 كيف تجمع نقاط المستوى؟"));
+    for (const line of ["📅 كل يوم تفتح التطبيق: +١٠", "🔮 كل توقع: +٣، والصح: +١٠", "📝 كل منشور: +٢ · 💬 كل رسالة: +٢", "🔥 رأي جريء يصدق: +٢٥", "🧠 كل تحليل تكتيك: +١٥ · ⚔️ كل حجة: +٥", "💥 التفاعل وقت المباريات: +١ لكل ٥ تفاعلات"]) how.append(el("p", null, line));
+    s.append(how);
+    const c = el("button", "cancel", "سكّر"); c.type = "button"; c.onclick = closeSheet; s.append(c);
+  });
+}
 let myStats = null;
 function levelOf(xp) {
   let i = 0; for (let k = 0; k < LEVELS.length; k++) if (xp >= LEVELS[k][0]) i = k;
   const next = LEVELS[i + 1];
-  return { name: LEVELS[i][1], idx: i, next: next ? next[0] : null, base: LEVELS[i][0] };
+  return { name: LEVELS[i][1], icon: LEVELS[i][2], color: LEVELS[i][3], idx: i, next: next ? next[0] : null, base: LEVELS[i][0] };
 }
 async function loadStreak() {
   if (!me) return;
@@ -479,7 +521,8 @@ async function renderStats(box) {
   if (!myStats) { const { data } = await sb.rpc("my_stats"); if (data) myStats = data; }
   if (!myStats) { box.append(el("p", null, "يطلع مستواك هنا بعد تحديث قاعدة البيانات.")); return; }
   const lv = levelOf(myStats.xp);
-  const head = el("div", "lvl"); head.append(el("b", null, lv.name), el("span", null, `${myStats.xp} نقطة`));
+  const head = el("button", "lvl"); head.type = "button"; head.append(el("b", null, `${lv.icon} ${lv.name}`), el("span", null, `${myStats.xp} نقطة · كل المستويات ←`));
+  head.onclick = () => levelsSheet(me.id);
   box.append(head);
   const bar = el("div", "xpbar"); const f = el("span"); f.style.width = (lv.next ? Math.round((myStats.xp - lv.base) / (lv.next - lv.base) * 100) : 100) + "%"; bar.append(f); box.append(bar);
   box.append(el("p", null, lv.next ? `باقي ${lv.next - myStats.xp} نقطة لـ"${LEVELS[lv.idx + 1][1]}"` : "وصلت أعلى مستوى 👑"));

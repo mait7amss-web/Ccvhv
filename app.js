@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 31; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 32; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -235,6 +235,9 @@ async function loadPeople(ids, force) {
   }
   for (const id of missing) if (!people[id]) people[id] = { name: "", team: null };
   for (const p of data || []) people[p.id] = { name: p.name, team: p.team, avatar_path: p.avatar_path || null, username: p.username || null };
+  // Level points for the badges next to names
+  const { data: lv } = await sb.rpc("user_levels", { ids: missing });
+  for (const x of lv || []) if (people[x.id]) people[x.id].xp = x.xp;
 }
 const nameOf = (id) => people[id]?.name || "شخص";
 
@@ -528,6 +531,7 @@ function messageRow(m, cont) {
   if (!mine && !cont) {
     const w = el("div", "who", nameOf(m.user_id));
     w.style.color = TEAM_BY_ID[people[m.user_id]?.team]?.color || colorFor(m.user_id);
+    const lb = levelBadge(m.user_id); if (lb) w.append(lb);
     const tp = teamPill(m.user_id); if (tp) w.append(tp);
     w.style.cursor = "pointer";
     w.onclick = (e) => { e.stopPropagation(); profileSheet(m.user_id); };

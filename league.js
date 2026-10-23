@@ -79,6 +79,7 @@ async function renderLeague() {
     const row = el("button", "lg-row" + (m.user_id === me.id ? " me" : "") + (up ? " up" : down ? " down" : "")); row.type = "button";
     row.append(el("span", "lg-rk", lgNum(i + 1)), avatarEl(m.user_id));
     const nm = el("span", "lg-nm", nameOf(m.user_id) + (m.user_id === me.id ? " (أنت)" : ""));
+    const lvb = levelBadge(m.user_id); if (lvb) nm.append(lvb);
     if (m.moved === 1) nm.append(el("i", "mv up", "⬆"));
     if (m.moved === -1) nm.append(el("i", "mv down", "⬇"));
     row.append(nm, el("b", "lg-pts", lgNum(m.total)));

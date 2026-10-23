@@ -793,6 +793,23 @@ body:has(#room:not([hidden])) .cm-fab { display: none; }
 .urow b { flex: 1; direction: ltr; text-align: end; unicode-bidi: isolate; }
 .cm-ig { border: 0; border-radius: 12px; padding: 11px; font: 800 14.5px var(--body); color: #fff; cursor: pointer; background: linear-gradient(90deg, #f58529, #dd2a7b 50%, #8134af); }
 .ig-prev { width: 60%; align-self: center; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+/* ---------- 🏅 شارة المستوى ---------- */
+.lvb { display: inline-flex; align-items: center; gap: 2px; border: 0; border-radius: 999px; padding: 1px 7px; margin-inline: 4px; font: 800 11px var(--body); color: #fff; background: var(--lc); cursor: pointer; vertical-align: middle; line-height: 1.6; flex: none; white-space: nowrap; }
+.cm-nmrow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.cm-nmrow b { font-size: 19px; }
+.lv-top { display: flex; align-items: center; gap: 12px; }
+.lv-top .avatar { width: 48px; height: 48px; font-size: 20px; }
+.lv-top div { display: flex; flex-direction: column; gap: 2px; }
+.lv-top span { color: var(--muted); font-size: 12.5px; }
+.lv-list { display: flex; flex-direction: column; gap: 6px; }
+.lv-row { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-inline-start: 4px solid var(--lc); border-radius: 12px; padding: 8px 10px; opacity: .7; }
+.lv-row.done { opacity: .9; }
+.lv-row.now { opacity: 1; border-color: var(--lc); box-shadow: 0 0 0 1px var(--lc); background: color-mix(in srgb, var(--lc) 18%, var(--card)); }
+.lv-ic { font-size: 22px; width: 28px; text-align: center; }
+.lv-n { flex: 1; font-weight: 800; font-size: 14px; }
+.lv-p { color: var(--muted); font-size: 12px; font-weight: 700; }
+.lv-row.now .lv-p { color: var(--chalk); }
+button.lvl { width: 100%; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0; text-align: start; }
 </style>
 </head>
 <body data-league="epl">
@@ -905,8 +922,8 @@ body:has(#room:not([hidden])) .cm-fab { display: none; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=31"></script>
-<script src="tactics.js?v=31"></script>
-<script src="live.js?v=31"></script><script src="arena.js?v=31"></script><script src="community.js?v=31"></script><script src="league.js?v=31"></script><script src="tour.js?v=31"></script>
+<script src="app.js?v=32"></script>
+<script src="tactics.js?v=32"></script>
+<script src="live.js?v=32"></script><script src="arena.js?v=32"></script><script src="community.js?v=32"></script><script src="league.js?v=32"></script><script src="tour.js?v=32"></script>
 </body>
 </html>

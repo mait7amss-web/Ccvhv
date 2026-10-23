@@ -269,7 +269,9 @@ function cmDrawProfile(uid, c) {
     av = wrap;
   }
   const info = el("div", "cm-pinfo");
-  info.append(el("b", null, nameOf(uid)));
+  const nmRow = el("div", "cm-nmrow"); nmRow.append(el("b", null, nameOf(uid)));
+  const lvb = levelBadge(uid); if (lvb) nmRow.append(lvb);
+  info.append(nmRow);
   if (people[uid]?.username) info.append(el("span", "cm-handle", "@" + people[uid].username));
   const pill = teamPill(uid); if (pill) info.append(pill);
   head.append(av, info);
@@ -339,6 +341,7 @@ function postCard(p, opts = {}) {
   const av = avatarEl(p.user_id); av.onclick = (e) => { e.stopPropagation(); cmOpen("user", p.user_id); };
   const who = el("button", "post-who"); who.type = "button";
   who.append(el("b", null, nameOf(p.user_id)));
+  const lvb = levelBadge(p.user_id); if (lvb) who.append(lvb);
   const pill = teamPill(p.user_id); if (pill) who.append(pill);
   who.onclick = (e) => { e.stopPropagation(); cmOpen("user", p.user_id); };
   const more = el("button", "post-more", "⋯"); more.type = "button"; more.setAttribute("aria-label", "خيارات");
@@ -984,7 +987,9 @@ async function profileSheet(uid) {
     const head = el("div", "cm-prof");
     const av = avatarEl(uid); av.classList.add("big");
     const info = el("div", "cm-pinfo");
-    info.append(el("b", null, nameOf(uid)));
+    const nmRow = el("div", "cm-nmrow"); nmRow.append(el("b", null, nameOf(uid)));
+    const lvb = levelBadge(uid); if (lvb) nmRow.append(lvb);
+    info.append(nmRow);
     if (people[uid]?.username) info.append(el("span", "cm-handle", "@" + people[uid].username));
     const pill = teamPill(uid); if (pill) info.append(pill);
     head.append(av, info);
