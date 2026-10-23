@@ -280,6 +280,9 @@ function cmDrawProfile(uid, c) {
     add("🔖 محفوظاتي", () => cmOpen("saved", null));
     add("⚙️ الإعدادات", () => openSettings());
     cmView.append(acts);
+    const tourBtn = el("button", "link", "🎓 شوف الجولة التعريفية مرة ثانية"); tourBtn.type = "button";
+    tourBtn.onclick = () => startTour();
+    cmView.append(tourBtn);
   }
   const stats = el("div", "cm-stats");
   for (const [n, label] of [[c.posts, "منشور"], [c.followers, "متابع"], [c.following, "يتابع"], [c.takes_right, "رأي صدق ✅"]]) {

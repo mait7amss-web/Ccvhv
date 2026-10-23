@@ -740,6 +740,22 @@ body:has(#room:not([hidden])) .cm-fab { display: none; }
 .post-room b { font-size: 14px; }
 .post-room span { font-size: 12.5px; font-weight: 800; color: var(--danger); white-space: nowrap; }
 .post-room.closed span { color: var(--muted); }
+/* ---------- 🎓 الجولة التعريفية ---------- */
+.tour { position: fixed; inset: 0; z-index: 40; }
+.tour.center { background: rgba(0,0,0,.72); }
+.tour-ring { position: fixed; border-radius: 16px; box-shadow: 0 0 0 9999px rgba(0,0,0,.72), 0 0 0 3px #f2b134, 0 0 24px 6px rgba(242,177,52,.55); transition: all .35s ease; pointer-events: none; animation: tourPulse 1.6s ease-in-out infinite; }
+@keyframes tourPulse { 50% { box-shadow: 0 0 0 9999px rgba(0,0,0,.72), 0 0 0 5px #f2b134, 0 0 34px 10px rgba(242,177,52,.6); } }
+.tour-card { position: fixed; left: 16px; right: 16px; max-width: 420px; margin-inline: auto; background: var(--card); border: 1px solid #f2b134; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 12px 40px rgba(0,0,0,.6); animation: tourIn .3s ease-out; }
+.tour.center .tour-card { top: 50%; transform: translateY(-50%); }
+@keyframes tourIn { from { opacity: 0; } }
+.tour-card h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 24px; }
+.tour-card p { margin: 0; color: var(--chalk); font-size: 14.5px; line-height: 1.8; opacity: .9; }
+.tour-dots { display: flex; gap: 5px; justify-content: center; }
+.tour-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.tour-dots i.on { background: #f2b134; width: 18px; border-radius: 999px; }
+.tour-acts { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.tour-acts .primary { flex: 1; }
+.tour-skip { border: 0; background: none; color: var(--muted); font: 700 13.5px var(--body); cursor: pointer; padding: 8px; }
 </style>
 </head>
 <body data-league="epl">
@@ -852,8 +868,8 @@ body:has(#room:not([hidden])) .cm-fab { display: none; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=25"></script>
-<script src="tactics.js?v=25"></script>
-<script src="live.js?v=25"></script><script src="arena.js?v=25"></script><script src="community.js?v=25"></script><script src="league.js?v=25"></script>
+<script src="app.js?v=26"></script>
+<script src="tactics.js?v=26"></script>
+<script src="live.js?v=26"></script><script src="arena.js?v=26"></script><script src="community.js?v=26"></script><script src="league.js?v=26"></script><script src="tour.js?v=26"></script>
 </body>
 </html>
