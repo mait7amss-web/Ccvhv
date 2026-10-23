@@ -735,9 +735,11 @@ function cmErr(error) {
 }
 async function cmUpcoming() {
   const { data } = await sb.from("matches").select("id,channel,home,away,kickoff,home_score,away_score")
-    .gt("kickoff", new Date().toISOString()).order("kickoff", { ascending: true }).limit(40);
+    .gt("kickoff", new Date().toISOString()).lt("kickoff", new Date(Date.now() + 10 * 24 * 3600000).toISOString())
+    .order("kickoff", { ascending: true }).limit(200);
   for (const m of data || []) cmMatches[m.id] = m;
-  return data || [];
+  // Hot takes: only matches with a big club (same list as the analysis studio)
+  return (data || []).filter((m) => typeof svBig !== "function" || svBig(m)).slice(0, 40);
 }
 function composeSheet({ reply = null, quote = null, take = false, match = null }) {
   const title = match ? "📣 ادعُ المجتمع للغرفة" : reply ? "💬 رد على " + nameOf(reply.user_id) : quote ? "✍️ اقتباس" : take ? "🔥 رأي جريء" : "✍️ منشور جديد";
@@ -762,11 +764,11 @@ function composeSheet({ reply = null, quote = null, take = false, match = null }
     // Hot take: pick a match
     const takeBox = el("div", "cm-takebox"); takeBox.hidden = !takeOn;
     const sel = el("select"); sel.id = "cmTakeMatch";
-    takeBox.append(el("p", "sheet-p", "اربط رأيك بمباراة جاية. الناس يصوتون صح أو هبد قبل البداية، وبعد النهاية الجمهور يحكم إذا صدق. لو صدق تاخذ ختم ✅ قالها قبل الكل و٢٥ نقطة."), sel);
+    takeBox.append(el("p", "sheet-p", "اربط رأيك بمباراة جاية لنادي من الكبار. الناس يصوتون صح أو هبد قبل البداية، وبعد النهاية الجمهور يحكم إذا صدق. لو صدق تاخذ ختم ✅ قالها قبل الكل و٢٥ نقطة."), sel);
     s.append(takeBox);
     if (!reply) {
       const ups = await cmUpcoming();
-      if (!ups.length) sel.append(el("option", null, "ما فيه مباريات جاية الحين"));
+      if (!ups.length) sel.append(el("option", null, "ما فيه مباريات للأندية الكبرى قريب"));
       const fmt = new Intl.DateTimeFormat("ar", { weekday: "short", hour: "numeric", minute: "2-digit" });
       for (const m of ups) { const o = el("option", null, `${CHANNELS.find((c) => c.id === m.channel)?.flag || ""} ${m.home} × ${m.away} · ${fmt.format(new Date(m.kickoff))}`); o.value = m.id; sel.append(o); }
     }
