@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "*/30 * * * *"   # every 30 minutes
   workflow_dispatch:          # "Run workflow" button for a manual sync
+    inputs:
+      force_match:
+        description: "Link all upcoming fixtures to API-Football now (1 = yes)"
+        required: false
+        default: "0"
 
 concurrency:
   group: sync-matches
@@ -34,6 +39,7 @@ jobs:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           SUPABASE_URL: https://bnjwhkilboybexkdvufc.supabase.co
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          FORCE_MATCH: ${{ inputs.force_match }}
       - name: Send match reminders and results
         if: always()
         run: node scripts/notify-matches.mjs

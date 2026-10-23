@@ -32,6 +32,13 @@ async function api(path) {
 const iso = (ms) => new Date(ms).toISOString();
 const enc = encodeURIComponent;
 
+// Plan check (the status endpoint doesn't count against the quota)
+try {
+  const st = await (await fetch("https://v3.football.api-sports.io/status", { headers: { "x-apisports-key": API_FOOTBALL_KEY } })).json();
+  const r = st.response || {};
+  console.log(`API-Football plan: ${r.subscription?.plan ?? "?"} · active: ${r.subscription?.active ?? "?"} · used today: ${r.requests?.current ?? "?"}/${r.requests?.limit_day ?? "?"}` + (st.errors && Object.keys(st.errors).length ? ` · errors: ${JSON.stringify(st.errors)}` : ""));
+} catch (e) { console.log("status check failed", e.message); }
+
 // Matches from 3h ago to 36h ahead
 let matches;
 try {
@@ -58,7 +65,7 @@ async function fixturesFor(channel, day) {
   return fixturesCache.get(key);
 }
 // Unmatched games far from kickoff are retried every 6 hours only, to save the daily quota.
-const retryNow = new Date().getUTCHours() % 6 === 0 && new Date().getUTCMinutes() < 30;
+const retryNow = process.env.FORCE_MATCH === "1" || (new Date().getUTCHours() % 6 === 0 && new Date().getUTCMinutes() < 30);
 for (const m of matches) {
   if (m.api_fixture_id) continue;
   if (new Date(m.kickoff).getTime() - now > 2 * H && !retryNow) continue;
