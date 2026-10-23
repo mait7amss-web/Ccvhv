@@ -23,6 +23,26 @@ function svDefaultTeam(f, top) {
 }
 
 /* ---------- open: pick a match, give it a title ---------- */
+// For a match without an official lineup yet: each team's latest official XI (its likely lineup)
+async function svLastXI(team) {
+  const cols = "home,away,kickoff,lineups";
+  const [h, a] = await Promise.all([
+    sb.from("matches").select(cols).eq("home", team).not("lineups", "is", null).lt("kickoff", new Date().toISOString()).order("kickoff", { ascending: false }).limit(1),
+    sb.from("matches").select(cols).eq("away", team).not("lineups", "is", null).lt("kickoff", new Date().toISOString()).order("kickoff", { ascending: false }).limit(1),
+  ]);
+  const hm = h.data?.[0], am = a.data?.[0];
+  const m = hm && am ? (new Date(hm.kickoff) > new Date(am.kickoff) ? hm : am) : hm || am;
+  if (!m) return null;
+  return m.home === team ? m.lineups.home : m.lineups.away;
+}
+async function svWithLineups(m) {
+  if (m.lineups) return m;
+  const [h, a] = await Promise.all([svLastXI(m.home), svLastXI(m.away)]);
+  if (!h && !a) return m;
+  const blank = () => ({ formation: "4-3-3", xi: [] });
+  return { ...m, lineups: { home: h || blank(), away: a || blank() }, guessed: true };
+}
+
 async function studioOpen({ match = null, reply = null } = {}) {
   closeSheet();
   if (typeof roomMatch !== "undefined" && roomMatch) leaveRoom();
@@ -34,30 +54,46 @@ async function studioOpen({ match = null, reply = null } = {}) {
     const { data } = await sb.from("matches").select("*").eq("id", match.id).maybeSingle();
     if (data) match = data;
   }
-  if (match) return svStage({ match, reply, title: match.lineups ? `${match.home} × ${match.away}` : "" });
+  if (match) return svStage({ match: await svWithLineups(match), reply, title: `${match.home} × ${match.away}` });
   openSheet("🎬 استوديو التحليل", async (s) => {
     s.append(el("p", "sheet-p", "حلّل مباراة بصوتك على الملعب: حرّك اللاعبين، ارسم، واشرح. يطلع لك فيديو تنشره هنا أو في تيك توك وانستقرام."));
     const list = el("div", "sv-picks"); s.append(list);
     list.append(el("div", "cm-loading", "يحمّل المباريات…"));
-    const now = Date.now();
-    const { data } = await sb.from("matches").select("id,channel,home,away,kickoff,status,lineups,home_score,away_score,live_home,live_away,players")
-      .not("lineups", "is", null).gt("kickoff", new Date(now - 8 * 24 * 3600000).toISOString()).lt("kickoff", new Date(now + 2 * 24 * 3600000).toISOString())
-      .order("kickoff", { ascending: false }).limit(40);
+    const now = Date.now(), D = 24 * 3600000;
+    const cols = "id,channel,home,away,kickoff,status,lineups,home_score,away_score,live_home,live_away,players";
+    const [up, past] = await Promise.all([
+      sb.from("matches").select(cols).gt("kickoff", new Date(now - 3 * 3600000).toISOString()).lt("kickoff", new Date(now + 8 * D).toISOString())
+        .not("status", "in", "(FINISHED,POSTPONED,CANCELLED)").order("kickoff", { ascending: true }).limit(40),
+      sb.from("matches").select(cols).not("lineups", "is", null).gt("kickoff", new Date(now - 8 * D).toISOString()).lt("kickoff", new Date(now).toISOString())
+        .eq("status", "FINISHED").order("kickoff", { ascending: false }).limit(30),
+    ]);
     list.textContent = "";
     const blank = el("button", "sv-pick"); blank.type = "button";
     blank.append(el("b", null, "⬜ لوحة فاضية"), el("span", null, "فريقين بدون أسماء، ترتّبهم مثل ما تبي"));
     blank.onclick = () => { closeSheet(); svStage({ match: null, reply, title: "" }); };
     list.append(blank);
-    const fmt = new Intl.DateTimeFormat("ar", { weekday: "short", day: "numeric", month: "short" });
-    for (const m of data || []) {
+    const fmt = new Intl.DateTimeFormat("ar", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+    const fmtDay = new Intl.DateTimeFormat("ar", { weekday: "short", day: "numeric", month: "short" });
+    const add = (m, upcoming) => {
       const ch = CHANNELS.find((c) => c.id === m.channel);
-      const sc = m.home_score != null ? ` ${m.home_score}-${m.away_score}` : m.live_home != null ? ` ${m.live_home}-${m.live_away}` : "";
+      const live = ["IN_PLAY", "PAUSED"].includes(m.status);
+      const sc = m.home_score != null ? `${m.home_score}-${m.away_score}` : m.live_home != null ? `${m.live_home}-${m.live_away}` : "";
       const b = el("button", "sv-pick"); b.type = "button";
-      b.append(el("b", null, `${m.home} × ${m.away}`), el("span", null, `${ch?.flag || ""} ${fmt.format(new Date(m.kickoff))}${sc ? " · " + "⁦" + sc.trim() + "⁩" : ""}`));
-      b.onclick = () => { closeSheet(); matchCache[m.id] = { ...(matchCache[m.id] || {}), ...m }; svStage({ match: m, reply, title: `${m.home} × ${m.away}` }); };
+      const info = upcoming
+        ? `${ch?.flag || ""} ${live ? "🔴 مباشر" : fmt.format(new Date(m.kickoff))} · ${m.lineups ? "📋 التشكيلة الرسمية" : "🔮 التشكيلة المتوقعة"}`
+        : `${ch?.flag || ""} ${fmtDay.format(new Date(m.kickoff))}${sc ? " · ⁦" + sc + "⁩" : ""}`;
+      b.append(el("b", null, `${m.home} × ${m.away}`), el("span", null, info));
+      b.onclick = async () => {
+        b.disabled = true;
+        const full = await svWithLineups(m);
+        closeSheet(); matchCache[m.id] = { ...(matchCache[m.id] || {}), ...m };
+        svStage({ match: full, reply, title: `${m.home} × ${m.away}` });
+      };
       list.append(b);
-    }
-    if (!(data || []).length) list.append(el("p", "sheet-p", "ما فيه مباريات فيها تشكيلة رسمية هالأيام. جرّب اللوحة الفاضية."));
+    };
+    if ((up.data || []).length) { list.append(el("div", "sv-sec", "⏭️ المباريات الجاية: حلّل قبلها وتوقّع")); for (const m of up.data) add(m, true); }
+    if ((past.data || []).length) { list.append(el("div", "sv-sec", "📋 اللي صارت: حلّل وش صار")); for (const m of past.data) add(m, false); }
+    if (!(up.data || []).length && !(past.data || []).length) list.append(el("p", "sheet-p", "ما فيه مباريات هالأيام. جرّب اللوحة الفاضية."));
     const c = el("button", "cancel", "إلغاء"); c.type = "button"; c.onclick = closeSheet; s.append(c);
   });
 }
@@ -200,6 +236,7 @@ function svDraw() {
   if (mt) {
     const sc = mt.home_score != null ? `${mt.home_score} - ${mt.away_score}` : mt.live_home != null ? `${mt.live_home} - ${mt.live_away}` : "×";
     sub = `${mt.home} ${sc} ${mt.away}`;
+    if (new Date(mt.kickoff).getTime() > Date.now()) sub += mt.guessed ? " · التشكيلة المتوقعة" : " · قبل المباراة";
   }
   c.fillText(svFit(c, sub, SV_W - 150), SV_W - 28, 108);
   // brand badge (left)
