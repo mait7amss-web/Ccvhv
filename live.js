@@ -20,6 +20,13 @@ function inLiveWindow(m) {
 function liveMinute(m) {
   const d = Math.floor((Date.now() - new Date(m.kickoff)) / 60000);
   if (d < 0) return { label: `تبدأ بعد ${-d} د`, n: 0 };
+  // Official minute from the live feed, moved on by the time since the last update
+  const fresh = m.live_at && Date.now() - new Date(m.live_at) < 20 * 60000;
+  if (fresh && m.minute != null && m.status !== "FINISHED") {
+    if (m.status === "PAUSED") return { label: "استراحة", n: 45 };
+    const n = Math.min(m.minute + Math.floor((Date.now() - new Date(m.live_at)) / 60000), m.minute + 15);
+    return { label: `د ${n}'`, n };
+  }
   if (m.status === "FINISHED" || d > 125) return { label: "انتهت", n: Math.min(d, 120) };
   if (m.status === "PAUSED") return { label: "استراحة", n: 45 };
   // rough: 15 min half-time after 45'
@@ -73,7 +80,7 @@ room.innerHTML = `
   <div class="rhead">
     <button type="button" class="ghost" id="roomBack" aria-label="رجوع">→ رجوع</button>
     <div class="rteams"><b id="rHome"></b><span class="rscore" id="rScore"></span><b id="rAway"></b></div>
-    <div class="rmeta"><span id="rMin"></span><span id="rPeople">👥 1</span></div>
+    <div class="rmeta"><span id="rMin"></span><button type="button" class="ghost rstats" id="rStats" hidden>📊 الإحصائيات</button><span id="rPeople">👥 1</span></div>
   </div>
   <div class="rcrowd" id="rCrowd"></div>
   <div class="rbody" id="rBody">
@@ -110,6 +117,7 @@ for (const e of LIVE_EMOJIS) {
   b.onclick = () => tapReaction(e);
   $("rReact").append(b);
 }
+$("rStats").onclick = () => roomMatch && statsSheet(roomMatch);
 $("roomBack").onclick = () => leaveRoom();
 
 async function enterRoom(m) {
@@ -181,9 +189,12 @@ function leaveRoom(silent) {
 
 function drawRoomHeader() {
   const m = roomMatch; if (!m) return;
-  const off = m.home_score != null && m.away_score != null;
-  $("rScore").textContent = off ? `${m.home_score} - ${m.away_score}` : `${crowdGoals.home} - ${crowdGoals.away}`;
+  const official = m.home_score != null && m.away_score != null;
+  const live = !official && m.live_home != null && m.live_away != null;
+  const off = official || live;
+  $("rScore").textContent = official ? `${m.home_score} - ${m.away_score}` : live ? `${m.live_home} - ${m.live_away}` : `${crowdGoals.home} - ${crowdGoals.away}`;
   $("rScore").classList.toggle("crowd", !off);
+  $("rStats").hidden = !m.stats;
   $("rMin").textContent = liveMinute(m).label;
   const c = $("rCrowd");
   if (!off && (crowdGoals.home || crowdGoals.away)) { c.hidden = false; c.textContent = "النتيجة حسب المدرج (الجمهور أكّدها)"; }
@@ -327,9 +338,12 @@ function onCrowdEvent(ev, fresh) {
   if (!roomMatch || ev.match_id !== roomMatch.id) return;
   if (ev.kind === "goal") { crowdGoals[ev.side] = (crowdGoals[ev.side] || 0) + 1; drawRoomHeader(); }
   if (!fresh) return;
-  const team = ev.side === "home" ? roomMatch.home : roomMatch.away;
-  celebrate(ev.kind === "goal" ? `⚽ جوووول!<small>${team} · حسب المدرج</small>` : `💥 المدرج انفجر! ${ev.emoji || "🔥"}<small>د ${ev.minute ?? ""}'</small>`);
-  for (let i = 0; i < 14; i++) setTimeout(() => floatEmoji(ev.kind === "goal" ? "⚽" : (ev.emoji || "🔥")), i * 90);
+  const esc = (x) => String(x ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  const team = esc(ev.side === "home" ? roomMatch.home : roomMatch.away);
+  const goal = ev.kind === "goal" || ev.kind === "official";
+  celebrate(ev.kind === "official" ? `⚽ جوووول!<small>${team}${ev.scorer ? " · " + esc(ev.scorer) : ""}${ev.minute ? ` · د ${esc(ev.minute)}'` : ""}</small>`
+    : ev.kind === "goal" ? `⚽ جوووول!<small>${team} · حسب المدرج</small>` : `💥 المدرج انفجر! ${esc(ev.emoji || "🔥")}<small>د ${esc(ev.minute ?? "")}'</small>`);
+  for (let i = 0; i < 14; i++) setTimeout(() => floatEmoji(goal ? "⚽" : (ev.emoji || "🔥")), i * 90);
 }
 function celebrate(html) {
   const c = $("rCeleb"); c.innerHTML = html; c.hidden = false;
@@ -346,7 +360,7 @@ function startCrowdWatch() {
   let m = matchCache[ev.match_id];
   if (!m) { const { data } = await sb.from("matches").select("id,channel,home,away,kickoff,status,home_score,away_score").eq("id", ev.match_id).maybeSingle(); m = data; if (m) matchCache[m.id] = m; }
   if (!m) return;
-  const t = el("button", "toast live", ev.kind === "goal" ? `⚽ جوول لـ${ev.side === "home" ? m.home : m.away}! (حسب المدرج) · ادخل الغرفة` : `💥 المدرج انفجر في ${m.home} × ${m.away} · ادخل`);
+  const t = el("button", "toast live", ev.kind === "official" ? `⚽ جوول لـ${ev.side === "home" ? m.home : m.away}!${ev.scorer ? " " + ev.scorer : ""} · ادخل الغرفة` : ev.kind === "goal" ? `⚽ جوول لـ${ev.side === "home" ? m.home : m.away}! (حسب المدرج) · ادخل الغرفة` : `💥 المدرج انفجر في ${m.home} × ${m.away} · ادخل`);
   t.type = "button"; t.onclick = () => { t.remove(); enterRoom(m); };
   document.body.append(t); setTimeout(() => t.remove(), 6000);
   }).subscribe();

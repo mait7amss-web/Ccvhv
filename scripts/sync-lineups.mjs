@@ -1,7 +1,9 @@
-// Official lineups and match events from API-Football, for matches around kickoff.
-//  - matches each of our fixtures (from football-data.org) to an API-Football fixture
-//  - saves lineups (formation, coach, starting XI, bench) and events (goals, cards, subs, VAR)
+// API-Football link-up, run every 30 minutes from GitHub Actions:
+//  - matches each of our fixtures (from football-data.org) in the next 36 hours to an API-Football
+//    fixture id, once (a handful of calls a day)
 //  - pushes "the lineup is out" to fans of either club and to people who predicted the match
+// The live data itself (score, minute, events, lineups, stats) is fetched every minute by the
+// live-sync edge function (supabase/functions/live-sync), paced to the plan's daily limit.
 // Env: API_FOOTBALL_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY. Skips quietly when the key is missing.
 import webpush from "web-push";
 import { AR, FAV_TO_FD } from "./teams.mjs";
@@ -30,10 +32,10 @@ async function api(path) {
 const iso = (ms) => new Date(ms).toISOString();
 const enc = encodeURIComponent;
 
-// Matches from 3h ago (events) to 75 min ahead (lineups)
+// Matches from 3h ago to 36h ahead
 let matches;
 try {
-  matches = await db(`matches?select=id,channel,home,away,home_en,away_en,kickoff,status,api_fixture_id,lineups,events&kickoff=gt.${enc(iso(now - 3 * H))}&kickoff=lt.${enc(iso(now + 75 * 60000))}`);
+  matches = await db(`matches?select=id,channel,home,away,home_en,away_en,kickoff,status,api_fixture_id,lineups,events&kickoff=gt.${enc(iso(now - 3 * H))}&kickoff=lt.${enc(iso(now + 36 * H))}`);
 } catch (e) {
   console.log("Lineup columns missing (run supabase/tactics.sql):", e.message.slice(0, 200)); process.exit(0);
 }
@@ -55,8 +57,11 @@ async function fixturesFor(channel, day) {
   if (!fixturesCache.has(key)) fixturesCache.set(key, await api(`fixtures?league=${LEAGUE_ID[channel]}&season=${season(new Date(day))}&date=${day}`));
   return fixturesCache.get(key);
 }
+// Unmatched games far from kickoff are retried every 6 hours only, to save the daily quota.
+const retryNow = new Date().getUTCHours() % 6 === 0 && new Date().getUTCMinutes() < 30;
 for (const m of matches) {
   if (m.api_fixture_id) continue;
+  if (new Date(m.kickoff).getTime() - now > 2 * H && !retryNow) continue;
   const day = m.kickoff.slice(0, 10);
   const list = (await fixturesFor(m.channel, day)).filter((f) => Math.abs(new Date(f.fixture.date) - new Date(m.kickoff)) <= 20 * 60000);
   let best = null, bestScore = -1;
@@ -70,37 +75,16 @@ for (const m of matches) {
   } else console.log(`no fixture match for ${m.home_en} v ${m.away_en}`);
 }
 
-// ---- 2. lineups and events ----
-const player = (p) => ({ name: p.player.name, number: p.player.number, pos: p.player.pos, grid: p.player.grid });
-const newLineups = [];
+// ---- 2. save the new fixture ids ----
 for (const m of matches) {
-  if (!m.api_fixture_id) continue;
-  const patch = { api_fixture_id: m.api_fixture_id };
-  const kick = new Date(m.kickoff).getTime();
-  if (!m.lineups && kick - now <= 75 * 60000) {
-    const lu = await api(`fixtures/lineups?fixture=${m.api_fixture_id}`);
-    if (lu.length === 2) {
-      const homeId = m._fx?.teams.home.id ?? null;
-      const [h, a] = homeId && lu[1].team.id === homeId ? [lu[1], lu[0]] : [lu[0], lu[1]];
-      const side = (t) => ({ team: t.team.name, formation: t.formation, coach: t.coach?.name || null, xi: (t.startXI || []).map(player), subs: (t.substitutes || []).map(player) });
-      patch.lineups = { home: side(h), away: side(a), fetched_at: iso(now) };
-      newLineups.push(m);
-    }
-  }
-  if (kick <= now) {
-    const ev = await api(`fixtures/events?fixture=${m.api_fixture_id}`);
-    const homeName = m._fx?.teams.home.name || m.lineups?.home?.team || patch.lineups?.home?.team;
-    patch.events = ev.map((e) => ({
-      min: e.time.elapsed, extra: e.time.extra || null,
-      side: e.team?.name === homeName ? "home" : "away",
-      type: e.type, detail: e.detail, player: e.player?.name || null, assist: e.assist?.name || null,
-    }));
-  }
-  await db(`matches?id=eq.${m.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(patch) });
+  if (!m._fx) continue;
+  await db(`matches?id=eq.${m.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ api_fixture_id: m.api_fixture_id }) });
 }
-console.log(`API-Football calls this run: ${apiCalls}. New lineups: ${newLineups.length}`);
+console.log(`API-Football calls this run: ${apiCalls}`);
 
 // ---- 3. "lineup is out" notifications ----
+// Lineups that are out for matches not started yet (filled in by live-sync); push_log stops repeats.
+const newLineups = matches.filter((m) => m.lineups && new Date(m.kickoff).getTime() > now - 15 * 60000);
 if (!newLineups.length) process.exit(0);
 const pub = (await db("app_public?key=eq.vapid_public&select=value"))[0]?.value;
 const priv = (await db("app_private?key=eq.vapid_private&select=value"))[0]?.value;

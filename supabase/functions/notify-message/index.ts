@@ -106,10 +106,17 @@ Deno.serve(async (req) => {
 // Crowd-confirmed goal or "the stadium exploded" moment: tell people who predicted the match
 // or were in its room recently, but not those active in the room in the last 2 minutes (they saw it).
 async function crowdEvent(eventId: number) {
-  const { data: ev } = await sb.from("crowd_events").select("id,match_id,kind,side,emoji,minute").eq("id", eventId).maybeSingle();
+  let { data: ev, error: evErr } = await sb.from("crowd_events").select("id,match_id,kind,side,emoji,minute,scorer").eq("id", eventId).maybeSingle();
+  if (evErr) ({ data: ev } = await sb.from("crowd_events").select("id,match_id,kind,side,emoji,minute").eq("id", eventId).maybeSingle());
   if (!ev) return new Response("gone", { status: 200 });
-  const { data: m } = await sb.from("matches").select("id,channel,home,away").eq("id", ev.match_id).maybeSingle();
+  let { data: m, error: mErr } = await sb.from("matches").select("id,channel,home,away,live_home,live_away").eq("id", ev.match_id).maybeSingle();
+  if (mErr) ({ data: m } = await sb.from("matches").select("id,channel,home,away").eq("id", ev.match_id).maybeSingle());
   if (!m) return new Response("gone", { status: 200 });
+  // The official feed already told everyone about this goal
+  if (ev.kind === "goal") {
+    const { data: off } = await sb.from("crowd_events").select("id").eq("match_id", m.id).eq("kind", "official").gte("created_at", new Date(Date.now() - 4 * 60000).toISOString()).limit(1);
+    if (off?.length) return new Response("official already sent", { status: 200 });
+  }
   const since = (min: number) => new Date(Date.now() - min * 60000).toISOString();
   const [{ data: preds }, { data: r30 }, { data: mo30 }, { data: r2 }, { data: rep2 }] = await Promise.all([
     sb.from("predictions").select("user_id").eq("match_id", m.id),
@@ -123,7 +130,9 @@ async function crowdEvent(eventId: number) {
   if (!users.size) return new Response("no one to tell", { status: 200 });
   const { data: subs } = await sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").in("user_id", [...users]);
   const team = ev.side === "home" ? m.home : m.away;
-  const payload = JSON.stringify(ev.kind === "goal"
+  const payload = JSON.stringify(ev.kind === "official"
+    ? { title: `⚽ جوووول ${team}!`, body: `${m.home} ${m.live_home ?? ""} - ${m.live_away ?? ""} ${m.away}${ev.minute ? ` · د ${ev.minute}'` : ""}${ev.scorer ? ` · ${ev.scorer}` : ""}`, url: `./?league=${m.channel}&view=pred`, tag: `crowd-${m.id}` }
+    : ev.kind === "goal"
     ? { title: `⚽ جوول لـ${team}! (حسب المدرج)`, body: `${m.home} × ${m.away}${ev.minute ? ` · د ${ev.minute}'` : ""} · ادخل الغرفة وشوف ردة فعل الجمهور`, url: `./?league=${m.channel}&view=pred`, tag: `crowd-${m.id}` }
     : { title: `💥 المدرج انفجر! ${ev.emoji || "🔥"}`, body: `شي كبير صار في ${m.home} × ${m.away}. ادخل الغرفة`, url: `./?league=${m.channel}&view=pred`, tag: `crowd-${m.id}` });
   const dead: string[] = [];

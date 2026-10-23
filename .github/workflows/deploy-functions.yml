@@ -20,3 +20,17 @@ jobs:
         run: supabase functions deploy notify-message --project-ref bnjwhkilboybexkdvufc --no-verify-jwt --use-api
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Deploy live-sync
+        run: supabase functions deploy live-sync --project-ref bnjwhkilboybexkdvufc --no-verify-jwt --use-api
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Pass the API-Football key to the live feed (if it's set)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          KEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          if [ -n "$KEY" ]; then
+            supabase secrets set API_FOOTBALL_KEY="$KEY" --project-ref bnjwhkilboybexkdvufc
+          else
+            echo "API_FOOTBALL_KEY not set in GitHub secrets yet"
+          fi

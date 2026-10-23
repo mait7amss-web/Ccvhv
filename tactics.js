@@ -617,7 +617,7 @@ function lineupSheet(match) {
       }
       s.append(ev);
     }
-    s.append(el("p", "sheet-p small", "التشكيلات والأحداث من API-Football، وتتحدث كل نص ساعة."));
+    s.append(el("p", "sheet-p small", "التشكيلات والأحداث من API-Football، وتتحدث أول بأول."));
     const acts = el("div", "acts");
     const tb = el("button", "primary", "🧠 حلّلها في لوحة تكتيك"); tb.type = "button";
     tb.onclick = () => {
@@ -626,6 +626,74 @@ function lineupSheet(match) {
     };
     const c = el("button", "cancel", "سكّر"); c.type = "button"; c.onclick = closeSheet;
     acts.append(tb, c); s.append(acts);
+  });
+}
+
+/* ---------- 📊 Match statistics (live, from API-Football) ---------- */
+const STAT_ROWS = [
+  ["Ball Possession", "الاستحواذ"], ["expected_goals", "الأهداف المتوقعة xG"], ["Total Shots", "التسديدات"],
+  ["Shots on Goal", "على المرمى"], ["Shots insidebox", "من داخل المنطقة"], ["Corner Kicks", "الركنيات"],
+  ["Total passes", "التمريرات"], ["Passes %", "دقة التمرير"], ["Goalkeeper Saves", "تصديات الحارس"],
+  ["Fouls", "الأخطاء"], ["Offsides", "التسلل"], ["Yellow Cards", "🟨 إنذارات"], ["Red Cards", "🟥 طرد"],
+];
+function statsSheet(match) {
+  openSheet(`📊 ${match.home} × ${match.away}`, (s) => {
+    const draw = () => {
+      const m = matchCache[match.id] || match;
+      s.querySelector(".stbody")?.remove();
+      const body = el("div", "stbody");
+      const score = m.home_score ?? m.live_home, score2 = m.away_score ?? m.live_away;
+      const head = el("div", "sthead");
+      head.append(el("b", null, m.home), el("span", "stsc", score != null ? `${score} - ${score2}` : "-"), el("b", null, m.away));
+      body.append(head);
+      if (typeof liveMinute === "function") body.append(el("div", "stmin", m.status === "FINISHED" || m.home_score != null ? "انتهت" : liveMinute(m).label));
+      const goals = (m.events || []).filter((e) => e.type === "Goal" && e.detail !== "Missed Penalty");
+      if (goals.length) {
+        const g = el("div", "stgoals");
+        for (const side of ["home", "away"]) {
+          const col = el("div", side);
+          for (const e of goals.filter((x) => x.side === side)) col.append(el("div", null, `⚽ ${e.player || ""} ${e.min ?? ""}'${e.detail === "Own Goal" ? " (عكسي)" : e.detail === "Penalty" ? " (ب)" : ""}`));
+          g.append(col);
+        }
+        body.append(g);
+      }
+      const st = m.stats || {};
+      for (const [key, label] of STAT_ROWS) {
+        const hv = st.home?.[key], av = st.away?.[key];
+        if (hv == null && av == null) continue;
+        const num = (v) => parseFloat(String(v ?? 0)) || 0;
+        const h = num(hv), a = num(av), tot = h + a || 1;
+        const row = el("div", "strow");
+        const top = el("div", "sttop");
+        top.append(el("b", h > a ? "win" : null, String(hv ?? 0)), el("span", null, label), el("b", a > h ? "win" : null, String(av ?? 0)));
+        const bars = el("div", "stbars");
+        const hb = el("i", "h"), ab = el("i", "a");
+        hb.style.width = (h / tot * 100) + "%"; ab.style.width = (a / tot * 100) + "%";
+        bars.append(hb, ab);
+        row.append(top, bars); body.append(row);
+      }
+      if (!m.stats) body.append(el("p", "sheet-p", "الإحصائيات تطلع أول ما تبدأ المباراة."));
+      const best = m.players;
+      if (best && (best.home?.length || best.away?.length)) {
+        body.append(el("h4", null, "⭐ الأفضل حسب التقييم"));
+        const g = el("div", "stgoals");
+        for (const side of ["home", "away"]) {
+          const col = el("div", side);
+          for (const p of best[side] || []) col.append(el("div", null, `${p.name} · ${Number(p.rating).toFixed(1)}`));
+          g.append(col);
+        }
+        body.append(g);
+      }
+      body.append(el("p", "sheet-p small", "من API-Football، وتتحدث أول بأول."));
+      const actsEl = s.querySelector(".acts"); if (actsEl) actsEl.before(body); else s.append(body);
+    };
+    draw();
+    const acts = el("div", "acts");
+    if (match.lineups) { const lb = el("button", "primary", "📋 التشكيلة"); lb.type = "button"; lb.onclick = () => lineupSheet(matchCache[match.id] || match); acts.append(lb); }
+    const c = el("button", "cancel", "سكّر"); c.type = "button"; c.onclick = closeSheet; acts.append(c);
+    s.append(acts);
+    // Refresh while open
+    const t = setInterval(() => { if ($("sheetBg").hidden || !s.contains(acts)) clearInterval(t); else draw(); }, 15000);
   });
 }
 

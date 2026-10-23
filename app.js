@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 17; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 18; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -340,6 +340,17 @@ async function startChat() {
     })
     .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, (p) => {
       const ch = (p.new && p.new.channel) || null;
+      if (p.eventType === "UPDATE" && p.new?.id) {
+        // Live feed updates every minute: patch in place instead of reloading everything
+        matchCache[p.new.id] = { ...(matchCache[p.new.id] || {}), ...p.new };
+        if (typeof roomMatch !== "undefined" && roomMatch?.id === p.new.id) { Object.assign(roomMatch, p.new); drawRoomHeader(); }
+        const list = matchData[ch]?.matches; const i = list ? list.findIndex(x => x.id === p.new.id) : -1;
+        if (i >= 0) {
+          list[i] = { ...list[i], ...p.new };
+          if (view === "pred" && ch === channel && !document.activeElement?.classList.contains("goal")) renderPredictions();
+          return;
+        }
+      }
       if (ch) { delete matchData[ch]; } else { for (const k in matchData) delete matchData[k]; }
       if (view !== "chat") refreshView();
     })
@@ -956,9 +967,11 @@ function adminSheet() {
 /* ---------- Matches & predictions ---------- */
 async function loadMatches(ch) {
   const MBASE = "id,channel,created_by,home,away,kickoff,home_score,away_score,status,external_id";
-  let { data: matches, error } = await sb.from("matches").select(MBASE + ",lineups,events")
-    .eq("channel", ch).order("kickoff", { ascending: false }).limit(150);
-  if (error) ({ data: matches, error } = await sb.from("matches").select(MBASE).eq("channel", ch).order("kickoff", { ascending: false }).limit(150));
+  let matches, error;
+  for (const cols of [MBASE + ",lineups,events,live_home,live_away,minute,stats,players,live_at", MBASE + ",lineups,events", MBASE]) {
+    ({ data: matches, error } = await sb.from("matches").select(cols).eq("channel", ch).order("kickoff", { ascending: false }).limit(150));
+    if (!error) break;
+  }
   for (const m of matches || []) matchCache[m.id] = m;
   if (error) { matchData[ch] = { matches: [], preds: {}, error: true }; return; }
   const ids = matches.map(m => m.id);
@@ -1012,7 +1025,7 @@ function matchCard(m, preds, started) {
   when.append(el("span", null, kickFmt.format(new Date(m.kickoff))));
   const off = { POSTPONED: "تأجلت", SUSPENDED: "توقفت", CANCELLED: "ألغيت" }[m.status];
   if (off) when.append(el("span", "live", off));
-  else if (started && !done) when.append(el("span", "live", m.status === "PAUSED" ? "● استراحة" : "● جارية"));
+  else if (started && !done) when.append(el("span", "live", m.status === "PAUSED" ? "● استراحة" : m.minute != null && typeof liveMinute === "function" ? "● " + liveMinute(m).label : "● جارية"));
   else if (done) when.append(el("span", null, "انتهت"));
   card.append(when);
 
@@ -1025,6 +1038,9 @@ function matchCard(m, preds, started) {
     mid.append(hIn, el("span", "vs", "-"), aIn);
   } else if (done) {
     mid.append(el("span", null, m.home_score), el("span", "vs", "-"), el("span", null, m.away_score));
+  } else if (m.live_home != null && m.live_away != null) {
+    mid.classList.add("livesc");
+    mid.append(el("span", null, m.live_home), el("span", "vs", "-"), el("span", null, m.live_away));
   } else {
     mid.append(el("span", "vs", "ضد"));
   }
@@ -1073,6 +1089,7 @@ function matchCard(m, preds, started) {
   }
   const tools = el("div", "mrow");
   if (m.lineups) { const b = el("button", "small", "📋 التشكيلة"); b.type = "button"; b.onclick = () => lineupSheet(m); tools.append(b); }
+  if (m.stats) { const b = el("button", "small", "📊 الإحصائيات"); b.type = "button"; b.onclick = () => statsSheet(m); tools.append(b); }
   if (started) { const b = el("button", "small", "⭐ قيّم اللاعبين"); b.type = "button"; b.onclick = () => ratingsSheet(m); tools.append(b); }
   if (inLiveWindow(m)) { const b = el("button", "small pri", "🔴 غرفة المباراة"); b.type = "button"; b.onclick = () => enterRoom(m); tools.prepend(b); }
   else if (started && Date.now() - new Date(m.kickoff) < 4 * 86400000) { const b = el("button", "small", "📊 تقرير المدرج"); b.type = "button"; b.onclick = () => matchReport(m); tools.append(b); }

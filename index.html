@@ -614,6 +614,26 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 .cm-gif { display: flex; flex-direction: column; gap: 6px; }
 .cm-gif input { font: 14px var(--body); color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; }
 .cm-wide { width: 100%; padding: 11px; font-size: 14.5px; text-align: center; }
+/* ---------- 📊 الإحصائيات ---------- */
+.stbody { display: flex; flex-direction: column; gap: 10px; }
+.sthead { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; text-align: center; }
+.sthead b { font-size: 14.5px; overflow-wrap: anywhere; }
+.stsc { font-family: var(--display); font-size: 30px; direction: rtl; unicode-bidi: isolate; }
+.stmin { text-align: center; color: var(--turf); font-weight: 800; font-size: 13px; margin-top: -6px; }
+.stgoals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.stgoals .away { text-align: end; }
+.strow { display: flex; flex-direction: column; gap: 4px; }
+.sttop { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.sttop span { color: var(--muted); }
+.sttop b { min-width: 40px; }
+.sttop b:last-child { text-align: end; }
+.sttop b.win { color: var(--turf); }
+.stbars { display: flex; gap: 4px; height: 6px; }
+.stbars i { display: block; height: 100%; border-radius: 999px; min-width: 2px; }
+.stbars .h { background: var(--league); }
+.stbars .a { background: var(--flood); margin-inline-start: auto; }
+.mid.livesc span:not(.vs) { color: var(--danger); }
+.rstats { padding: 2px 8px; font-size: 12px; }
 </style>
 </head>
 <body data-league="epl">
@@ -725,8 +745,8 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=17"></script>
-<script src="tactics.js?v=17"></script>
-<script src="live.js?v=17"></script><script src="arena.js?v=17"></script><script src="community.js?v=17"></script>
+<script src="app.js?v=18"></script>
+<script src="tactics.js?v=18"></script>
+<script src="live.js?v=18"></script><script src="arena.js?v=18"></script><script src="community.js?v=18"></script>
 </body>
 </html>
