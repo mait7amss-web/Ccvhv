@@ -221,6 +221,7 @@ begin
   new.tags := coalesce((select array_agg(distinct lower(t[1])) from regexp_matches(coalesce(new.body, ''), '#([0-9A-Za-z_ء-ي٠-٩]{2,30})', 'g') as t), '{}');
   new.tags := new.tags[1:5];
   new.like_count := 0; new.reply_count := 0; new.repost_count := 0; new.hidden := false;
+  new.view_count := 0;
   new.created_at := now();
   return new;
 end;
@@ -408,6 +409,44 @@ begin
     'args', args, 'reacts', reacts, 'preds', preds, 'exact', exact, 'right', res_ok, 'posts', nposts, 'takes', takes);
 end;
 $$;
+
+-- ---------- المشاهدات والمحفوظات ----------
+alter table public.posts add column if not exists view_count int not null default 0;
+create table if not exists public.post_views (
+  post_id bigint not null references public.posts (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  primary key (post_id, user_id)
+);
+alter table public.post_views enable row level security;   -- تنكتب فقط عن طريق post_seen
+
+create table if not exists public.bookmarks (
+  post_id bigint not null references public.posts (id) on delete cascade,
+  user_id uuid not null default auth.uid() references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id)
+);
+create index if not exists bookmarks_user_idx on public.bookmarks (user_id, created_at desc);
+alter table public.bookmarks enable row level security;
+drop policy if exists "own bookmarks" on public.bookmarks;
+create policy "own bookmarks" on public.bookmarks for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- كل شخص ينحسب مشاهدة وحدة لكل منشور (منشوراتك ما تنحسب لك)
+create or replace function public.post_seen(ids bigint[])
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return; end if;
+  with fresh as (
+    insert into public.post_views (post_id, user_id)
+    select p.id, auth.uid() from public.posts p
+    where p.id = any (ids[1:100]) and p.user_id <> auth.uid()
+    on conflict do nothing
+    returning post_id
+  )
+  update public.posts x set view_count = x.view_count + 1 from fresh where x.id = fresh.post_id;
+end;
+$$;
+grant execute on function public.post_seen(bigint[]) to authenticated;
 
 -- ---------- التحديث المباشر ----------
 do $$
