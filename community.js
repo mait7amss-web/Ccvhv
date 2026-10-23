@@ -1,7 +1,7 @@
 /* ---------- 🌍 المجتمع العام: منشورات للجميع مثل تويتر، ومعها "رأي جريء" ----------
    Lives above the leagues as its own chip. Data and rules are in supabase/community.sql. */
 
-const CM_COLS = "id,user_id,body,image_path,gif_url,audio_path,audio_secs,poll,take_match_id,reply_to,root_id,quote_of,mentions,tags,like_count,reply_count,repost_count,view_count,hidden,created_at";
+const CM_COLS = "id,user_id,body,image_path,gif_url,audio_path,audio_secs,poll,take_match_id,reply_to,root_id,quote_of,mentions,tags,like_count,reply_count,repost_count,view_count,hidden,created_at,match_id";
 const CM_PAGE = 25;
 const cmPosts = {};                 // id -> post
 const cmFeeds = {};                 // key -> { ids: [], done: bool }
@@ -75,7 +75,7 @@ refreshView = async function (jump) {
   leagueTabs.hidden = community; cmTabs.hidden = !community;
   cmView.hidden = !community; cmFab.hidden = !community || cmPage()?.kind === "thread";
   if (!community) { cmNewPill.hidden = true; return _refreshViewCm(jump); }
-  for (const id of ["thread", "predView", "tableView", "arenaView", "chatFooter", "liveBanner"]) if ($(id)) $(id).hidden = true;
+  for (const id of ["thread", "roomsView", "predView", "tableView", "arenaView", "chatFooter", "liveBanner"]) if ($(id)) $(id).hidden = true;
   return drawCommunity(jump);
 };
 
@@ -89,7 +89,7 @@ async function cmHydrate(list) {
   const ids = fresh.map((p) => p.id);
   const polls = fresh.filter((p) => p.poll).map((p) => p.id);
   const takes = fresh.filter((p) => p.take_match_id).map((p) => p.id);
-  const mids = [...new Set(fresh.map((p) => p.take_match_id).filter((m) => m && !cmMatches[m]))];
+  const mids = [...new Set(fresh.flatMap((p) => [p.take_match_id, p.match_id]).filter((m) => m && !cmMatches[m]))];
   const [lk, pv, tv, vd, ms] = await Promise.all([
     ids.length ? sb.from("post_likes").select("post_id").eq("user_id", me.id).in("post_id", ids) : { data: [] },
     polls.length ? sb.from("post_poll_votes").select("post_id,user_id,option").in("post_id", polls) : { data: [] },
@@ -338,6 +338,13 @@ function postCard(p, opts = {}) {
   }
   if (p.take_match_id) card.append(takeHead(p));
   if (p.body) card.append(postBody(p));
+  if (p.match_id && cmMatches[p.match_id]) {
+    const m = cmMatches[p.match_id], open = inLiveWindow(m);
+    const rb = el("button", "post-room" + (open ? "" : " closed")); rb.type = "button";
+    rb.append(el("b", null, `🏟️ ${m.home} × ${m.away}`), el("span", null, open ? "🔴 ادخل الغرفة" : "🔒 انقفلت"));
+    rb.onclick = (e) => { e.stopPropagation(); open ? enterRoom(m) : (m.stats || m.lineups ? statsSheet(m) : toast("🔒 الغرفة انقفلت")); };
+    card.append(rb);
+  }
   if (p.poll) card.append(postPoll(p));
   if (p.image_path) {
     const im = el("img", "post-img"); im.alt = "صورة"; im.loading = "lazy";
@@ -682,8 +689,8 @@ async function cmUpcoming() {
   for (const m of data || []) cmMatches[m.id] = m;
   return data || [];
 }
-function composeSheet({ reply = null, quote = null, take = false }) {
-  const title = reply ? "💬 رد على " + nameOf(reply.user_id) : quote ? "✍️ اقتباس" : take ? "🔥 رأي جريء" : "✍️ منشور جديد";
+function composeSheet({ reply = null, quote = null, take = false, match = null }) {
+  const title = match ? "📣 ادعُ المجتمع للغرفة" : reply ? "💬 رد على " + nameOf(reply.user_id) : quote ? "✍️ اقتباس" : take ? "🔥 رأي جريء" : "✍️ منشور جديد";
   openSheet(title, async (s) => {
     let att = null;               // { kind: "image"|"gif"|"audio"|"poll", ... }
     let takeOn = take;
@@ -692,6 +699,13 @@ function composeSheet({ reply = null, quote = null, take = false }) {
     const count = el("span", "cm-count", "٥٠٠");
     ta.oninput = () => { count.textContent = arNum(500 - ta.value.length); };
     if (quote) { const q = el("div", "post-quote"); q.append(el("b", null, nameOf(quote.user_id)), el("div", null, quote.body || "منشور")); s.append(q); }
+    if (match) {
+      cmMatches[match.id] = { ...(cmMatches[match.id] || {}), ...match };
+      ta.value = `🔴 غرفة ${match.home} × ${match.away} مفتوحة! تعالوا نتابعها سوا 🔥`;
+      count.textContent = arNum(500 - ta.value.length);
+      const q = el("div", "post-room"); q.append(el("b", null, `🏟️ ${match.home} × ${match.away}`), el("span", null, "🔴 زر الدخول للغرفة"));
+      s.append(q);
+    }
     s.append(ta);
     const preview = el("div", "cm-att"); s.append(preview);
 
@@ -748,7 +762,7 @@ function composeSheet({ reply = null, quote = null, take = false }) {
       setTimeout(() => { if (rec && Date.now() - t0 >= 119000) { stopRec(false); mic.textContent = "🎤"; } }, 120000);
     });
     tool("📊", () => { att = { kind: "poll", inputs: [cmOpt(0), cmOpt(1)] }; showAtt(); });
-    if (!reply && !quote) {
+    if (!reply && !quote && !match) {
       const tb = tool("🔥 رأي جريء", () => { takeOn = !takeOn; takeBox.hidden = !takeOn; tb.classList.toggle("on", takeOn); });
       tb.classList.toggle("on", takeOn);
     }
@@ -760,6 +774,7 @@ function composeSheet({ reply = null, quote = null, take = false }) {
       const body = ta.value.trim() || null;
       const row = { user_id: me.id, body };
       if (reply) row.reply_to = reply.id;
+      if (match) row.match_id = match.id;
       if (quote) row.quote_of = quote.id;
       if (takeOn && !reply) {
         if (!body) return "اكتب رأيك الجريء.";
@@ -808,8 +823,8 @@ function composeSheet({ reply = null, quote = null, take = false }) {
         cmStack = []; if (cmTab !== "following") cmTab = "all";
       }
       if (quote) quote.repost_count++;
-      toast(row.take_match_id ? "🔥 رأيك الجريء نزل! نشوف بعد المباراة" : reply ? "انرسل ردك ✅" : "انتشر ✅");
-      drawCommunity(!reply);
+      toast(match ? "📣 انتشر في المجتمع، الحين الكل يقدر يدخل الغرفة" : row.take_match_id ? "🔥 رأيك الجريء نزل! نشوف بعد المباراة" : reply ? "انرسل ردك ✅" : "انتشر ✅");
+      if (!match) drawCommunity(!reply);
     });
   });
 }
@@ -873,7 +888,7 @@ startChat = async function () {
   return r;
 };
 const _drawLiveBannerCm = drawLiveBanner;
-drawLiveBanner = function () { _drawLiveBannerCm(); if (community) $("liveBanner").hidden = true; };
+drawLiveBanner = function () { _drawLiveBannerCm(); $("liveBanner").hidden = true; };
 
 /* ---------- my page: the top-left button opens it, settings move inside ---------- */
 const openSettings = $("meBtn").onclick;

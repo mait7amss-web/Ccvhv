@@ -11,12 +11,14 @@ const QUICK_POLLS = (m) => [
   ["الشوط الجاي؟", ["فيه أهداف", "بيقفلونها", "فيه طرد"]],
   ["مين أحسن لاعب الحين؟", [m.home, m.away]],
 ];
-const LIVE_BEFORE = 60 * 60000, LIVE_AFTER = 150 * 60000;
+// Match rooms open 1 hour before kickoff and close 4 hours after it (about 2 hours after the final whistle).
+// The server enforces the same window (supabase/rooms.sql).
+const LIVE_BEFORE = 60 * 60000, LIVE_AFTER = 240 * 60000;
 function inLiveWindow(m) {
   const k = new Date(m.kickoff).getTime(), now = Date.now();
-  if (m.status === "FINISHED" && now - k > 125 * 60000) return false;
   return now >= k - LIVE_BEFORE && now <= k + LIVE_AFTER;
 }
+const roomOpensIn = (m) => new Date(m.kickoff).getTime() - LIVE_BEFORE - Date.now();
 function liveMinute(m) {
   const d = Math.floor((Date.now() - new Date(m.kickoff)) / 60000);
   if (d < 0) return { label: `تبدأ بعد ${-d} د`, n: 0 };
@@ -84,6 +86,7 @@ room.innerHTML = `
   </div>
   <div class="rcrowd" id="rCrowd"></div>
   <div class="rbody" id="rBody">
+    <button type="button" class="rshare" id="rShare">📣 ادعُ المجتمع لهالغرفة</button>
     <section class="rsec">
       <div class="rlabel"><b>⚖️ مين مسيطر الحين؟</b><span id="rMomN"></span></div>
       <div class="mombar"><span id="rMomHome"></span><span id="rMomAway"></span></div>
@@ -118,9 +121,15 @@ for (const e of LIVE_EMOJIS) {
   $("rReact").append(b);
 }
 $("rStats").onclick = () => roomMatch && statsSheet(roomMatch);
+$("rShare").onclick = () => roomMatch && composeSheet({ match: roomMatch });
 $("roomBack").onclick = () => leaveRoom();
 
 async function enterRoom(m) {
+  if (!inLiveWindow(m)) {
+    const ms = roomOpensIn(m);
+    toast(ms > 0 ? `الغرفة تفتح قبل المباراة بساعة (بعد ${Math.ceil(ms / 3600000)} س تقريبًا)` : "🔒 الغرفة انقفلت");
+    return;
+  }
   closeSheet();
   if (roomMatch) leaveRoom(true);
   roomMatch = m; matchCache[m.id] = { ...(matchCache[m.id] || {}), ...m };
@@ -226,7 +235,7 @@ $("rCompose").addEventListener("submit", async (e) => {
   const inp = $("rMsg"); const body = inp.value.trim(); if (!body || !roomMatch) return;
   inp.value = "";
   try { await insertMessage({ channel: roomMatch.channel, body, match_id: roomMatch.id, ...(replyTo ? { reply_to: replyTo.id } : {}) }); clearReply(); renderRoomFeed(true); }
-  catch (err) { inp.value = body; toast(err?.code === "42501" ? "حسابك موقوف عن الكتابة." : "ما انرسل التعليق."); }
+  catch (err) { inp.value = body; toast(err?.code === "42501" ? (inLiveWindow(roomMatch) ? "حسابك موقوف عن الكتابة." : "🔒 الغرفة انقفلت.") : "ما انرسل التعليق."); }
 });
 
 /* reactions */
@@ -475,4 +484,59 @@ async function renderStats(box) {
 }
 // run once the chat starts
 const _startChat = startChat;
-startChat = async function () { const r = await _startChat(); loadStreak(); refreshLiveBanner(); startCrowdWatch(); return r; };
+startChat = async function () {
+  const r = await _startChat(); loadStreak(); refreshLiveBanner(); startCrowdWatch();
+  if (openRoomId) {
+    const id = openRoomId; openRoomId = null;
+    const { data: m } = await sb.from("matches").select("*").eq("id", id).maybeSingle();
+    if (m) enterRoom(m);
+  }
+  return r;
+};
+
+/* ---------- 🏟️ المباريات: a room per match (replaces the league chat) ---------- */
+function renderRooms() {
+  const box = $("roomsView"); box.textContent = "";
+  const data = matchData[channel] || { matches: [] };
+  const head = el("div", "pane-head");
+  const ht = el("div"); ht.append(el("h2", null, "🏟️ غرف المباريات"), el("p", null, "كل مباراة لها غرفة تفتح قبلها بساعة، وتنقفل بعد نهايتها بساعتين."));
+  head.append(ht); box.append(head);
+  const now = Date.now(), DAY = 86400000;
+  const list = data.matches || [];
+  const open = list.filter(inLiveWindow).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  const soon = list.filter((m) => roomOpensIn(m) > 0 && new Date(m.kickoff) - now < 4 * DAY).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  const closed = list.filter((m) => !inLiveWindow(m) && new Date(m.kickoff) < now && now - new Date(m.kickoff) < 3 * DAY).sort((a, b) => b.kickoff.localeCompare(a.kickoff));
+  const card = (m, state) => {
+    const c = el("button", "roomcard " + state); c.type = "button";
+    const top = el("div", "rc-top");
+    const score = m.home_score ?? m.live_home, score2 = m.away_score ?? m.live_away;
+    const mid = el("span", "rc-sc", score != null ? `${score} - ${score2}` : timeFmt.format(new Date(m.kickoff)));
+    top.append(el("b", null, m.home), mid, el("b", null, m.away));
+    c.append(top);
+    const foot = el("div", "rc-foot");
+    if (state === "open") {
+      foot.append(el("span", "rc-live", new Date(m.kickoff) > now ? "🟢 الغرفة مفتوحة · قبل المباراة" : "🔴 " + liveMinute(m).label), el("span", "rc-go", "ادخل الغرفة ←"));
+      c.onclick = () => enterRoom(m);
+    } else if (state === "soon") {
+      const ms = roomOpensIn(m);
+      const d = Math.floor(ms / 86400000), h = Math.floor(ms % 86400000 / 3600000), mi = Math.floor(ms % 3600000 / 60000);
+      foot.append(el("span", null, `⏳ تفتح بعد ${d ? d + " يوم " : ""}${d || h ? h + " س" : mi + " د"}`), el("span", "rc-when", dayFmt.format(new Date(m.kickoff))));
+      c.onclick = () => toast("الغرفة تفتح قبل المباراة بساعة. توقّع الحين من خانة التوقعات 🔮");
+    } else {
+      foot.append(el("span", null, "🔒 الغرفة انقفلت"), el("span", "rc-go", m.stats || m.lineups ? "📊 التفاصيل" : ""));
+      c.onclick = () => (m.stats || m.lineups ? statsSheet(m) : toast("🔒 الغرفة انقفلت"));
+    }
+    c.append(foot);
+    return c;
+  };
+  if (open.length) { box.append(el("div", "sec", "🔴 مفتوحة الحين")); for (const m of open) box.append(card(m, "open")); }
+  if (soon.length) { box.append(el("div", "sec", "⏳ الجاية")); for (const m of soon) box.append(card(m, "soon")); }
+  if (closed.length) { box.append(el("div", "sec", "🔒 انقفلت")); for (const m of closed) box.append(card(m, "closed")); }
+  if (!open.length && !soon.length && !closed.length) {
+    const e = el("div", "empty"); const ico = el("span", "ico", "🏟️"); ico.setAttribute("aria-hidden", "true");
+    e.append(ico, el("strong", null, "ما فيه مباريات قريبة"), "أول ما تقرب مباراة في " + lg().name + " تطلع غرفتها هنا.");
+    box.append(e);
+  }
+}
+// The rooms list keeps its countdowns fresh
+setInterval(() => { if (view === "chat" && !$("scroller").hidden && !community && $("roomsView") && !$("roomsView").hidden) renderRooms(); }, 60000);

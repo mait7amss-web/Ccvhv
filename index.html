@@ -720,6 +720,26 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 .motm-b { display: flex; align-items: center; gap: 8px; font: 700 13px var(--body); color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px; cursor: pointer; text-align: start; }
 .motm-b i { font-style: normal; background: var(--league); color: var(--league-ink); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; font-size: 11px; flex: none; }
 .motm-b.on { border-color: #e3c84a; background: color-mix(in srgb, #e3c84a 20%, var(--card)); }
+/* ---------- 🏟️ غرف المباريات ---------- */
+.roomcard { display: flex; flex-direction: column; gap: 8px; font: inherit; color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; cursor: pointer; text-align: start; }
+.roomcard.open { border-color: var(--danger); box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
+.roomcard.closed { opacity: .75; }
+.rc-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.rc-top b { font-size: 15px; overflow-wrap: anywhere; }
+.rc-top b:last-child { text-align: end; }
+.rc-sc { font-family: var(--display); font-size: 20px; direction: rtl; unicode-bidi: isolate; color: var(--muted); white-space: nowrap; }
+.roomcard.open .rc-sc { color: var(--danger); }
+.rc-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.rc-live { color: var(--danger); font-weight: 800; }
+.rc-go { color: var(--league); font-weight: 800; }
+.rc-when { font-size: 11.5px; }
+.rshare { border: 1px dashed var(--league); background: color-mix(in srgb, var(--league) 10%, transparent); color: var(--chalk); font: 800 13.5px var(--body); border-radius: 12px; padding: 10px; cursor: pointer; }
+body:has(#room:not([hidden])) .cm-fab { display: none; }
+.post-room { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--card)); border-radius: 12px; padding: 10px 12px; font: inherit; color: var(--chalk); cursor: pointer; text-align: start; }
+.post-room.closed { border-color: var(--line); background: var(--pitch-2); color: var(--muted); }
+.post-room b { font-size: 14px; }
+.post-room span { font-size: 12.5px; font-weight: 800; color: var(--danger); white-space: nowrap; }
+.post-room.closed span { color: var(--muted); }
 </style>
 </head>
 <body data-league="epl">
@@ -776,7 +796,7 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 </header>
 <div class="strip" id="strip" hidden>
   <div class="wrap views" role="tablist" aria-label="الأقسام">
-    <button type="button" id="vChat" aria-pressed="true">النقاش</button>
+    <button type="button" id="vChat" aria-pressed="true">🏟️ المباريات</button>
     <button type="button" id="vPred" aria-pressed="false">التوقعات</button>
     <button type="button" id="vTable" aria-pressed="false">🏆 الدوري</button>
     <button type="button" id="vArena" aria-pressed="false">نقاش منظم</button>
@@ -784,6 +804,7 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 </div>
 <main id="scroller" hidden>
   <div class="wrap" id="thread"></div>
+  <div class="wrap pane" id="roomsView" hidden></div>
   <div class="wrap pane" id="predView" hidden></div>
   <div class="wrap pane" id="tableView" hidden></div>
   <div class="wrap pane" id="arenaView" hidden></div>
@@ -831,8 +852,8 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=24"></script>
-<script src="tactics.js?v=24"></script>
-<script src="live.js?v=24"></script><script src="arena.js?v=24"></script><script src="community.js?v=24"></script><script src="league.js?v=24"></script>
+<script src="app.js?v=25"></script>
+<script src="tactics.js?v=25"></script>
+<script src="live.js?v=25"></script><script src="arena.js?v=25"></script><script src="community.js?v=25"></script><script src="league.js?v=25"></script>
 </body>
 </html>

@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
   if (!id) return new Response("bad request", { status: 400 });
 
   const BASE = "id,user_id,channel,body,image_path,poll,gif_url,sticker,audio_path,mentions,reply_to";
-  let { data: msg, error } = await sb.from("messages").select(BASE + ",tactic,scenario,debate").eq("id", id).maybeSingle();
+  let { data: msg, error } = await sb.from("messages").select(BASE + ",tactic,scenario,debate,match_id").eq("id", id).maybeSingle();
   if (error) ({ data: msg } = await sb.from("messages").select(BASE).eq("id", id).maybeSingle());
   if (!msg) return new Response("gone", { status: 200 });
 
@@ -58,7 +58,8 @@ Deno.serve(async (req) => {
 
   const [{ data: author }, { data: leagueSubs }, { data: directSubs }, { data: blockers }] = await Promise.all([
     sb.from("profiles").select("name").eq("id", msg.user_id).maybeSingle(),
-    sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").contains("leagues", [msg.channel]).neq("user_id", msg.user_id),
+    // Match-room comments only notify people who were mentioned or replied to (no league-wide push per comment)
+    msg.match_id ? Promise.resolve({ data: [] }) : sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").contains("leagues", [msg.channel]).neq("user_id", msg.user_id),
     direct.size ? sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").in("user_id", [...direct]) : Promise.resolve({ data: [] }),
     sb.from("blocks").select("blocker").eq("blocked", msg.user_id),
   ]);
@@ -85,7 +86,7 @@ Deno.serve(async (req) => {
     return JSON.stringify({
       title,
       body: text.length > 140 ? text.slice(0, 139) + "…" : text,
-      url: `./?league=${msg.channel}&view=chat`,
+      url: `./?league=${msg.channel}&view=chat${msg.match_id ? `&room=${msg.match_id}` : ""}`,
       tag: mentioned || repliedTo ? `direct-${msg.id}` : `chat-${msg.channel}`,
     });
   };
