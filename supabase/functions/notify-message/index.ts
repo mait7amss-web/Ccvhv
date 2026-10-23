@@ -42,6 +42,7 @@ Deno.serve(async (req) => {
   if (input.event_id) return crowdEvent(input.event_id);
   if (input.arena_id) return arenaStart(input.arena_id);
   if (input.notif_id) return communityNotif(input.notif_id);
+  if (input.dm_id) return directMessage(input.dm_id);
   const id = input.id;
   if (!id) return new Response("bad request", { status: 400 });
 
@@ -222,4 +223,27 @@ async function communityNotif(notifId: number) {
   }));
   if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
   return new Response(`community sent ${subs.length - dead.length}`, { status: 200 });
+}
+
+// Direct message: push to the other person, grouped per conversation (one notification per thread).
+async function directMessage(dmId: number) {
+  const { data: m } = await sb.from("dm_messages").select("id,thread_id,sender,body,image_path").eq("id", dmId).maybeSingle();
+  if (!m) return new Response("gone", { status: 200 });
+  const { data: th } = await sb.from("dm_threads").select("id,user_a,user_b").eq("id", m.thread_id).maybeSingle();
+  if (!th) return new Response("gone", { status: 200 });
+  const to = th.user_a === m.sender ? th.user_b : th.user_a;
+  const [{ data: actor }, { data: subs }] = await Promise.all([
+    sb.from("profiles").select("name").eq("id", m.sender).maybeSingle(),
+    sb.from("push_subscriptions").select("endpoint,p256dh,auth").eq("user_id", to),
+  ]);
+  if (!subs?.length) return new Response("no devices", { status: 200 });
+  const text = m.body ? (m.body.length > 140 ? m.body.slice(0, 139) + "…" : m.body) : "📷 صورة";
+  const payload = JSON.stringify({ title: `✉️ ${actor?.name || "رسالة جديدة"}`, body: text, url: `./?view=community&dm=${th.id}`, tag: `dm-${th.id}` });
+  const dead: string[] = [];
+  await Promise.all(subs.map(async (s) => {
+    try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400 }); }
+    catch (e) { const c = (e as { statusCode?: number }).statusCode; if (c === 404 || c === 410) dead.push(s.endpoint); }
+  }));
+  if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
+  return new Response(`dm sent ${subs.length - dead.length}`, { status: 200 });
 }

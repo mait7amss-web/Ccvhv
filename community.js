@@ -279,7 +279,10 @@ function cmDrawProfile(uid, c) {
     const following = cmFollowing.has(uid);
     const f = el("button", following ? "ghost" : "primary cm-follow", following ? "تتابعه ✓" : "تابع"); f.type = "button";
     f.onclick = () => cmToggleFollow(uid, f);
-    head.append(f);
+    const dmb = el("button", "ghost cm-dmbtn", "✉️"); dmb.type = "button"; dmb.setAttribute("aria-label", "راسله");
+    dmb.onclick = () => dmStart(uid);
+    const btns = el("div", "cm-pbtns"); btns.append(f, dmb);
+    head.append(btns);
   }
   cmView.append(head);
   if (uid === me.id) {
@@ -1014,7 +1017,9 @@ async function profileSheet(uid) {
       toast(follow ? `✅ صرت تتابع ${nameOf(uid)}` : `ألغيت متابعة ${nameOf(uid)}`);
       closeSheet(); profileSheet(uid);
     };
-    acts.append(f);
+    const dmb = el("button", "ghost", "✉️ راسله"); dmb.type = "button";
+    dmb.onclick = () => dmStart(uid);
+    acts.append(f, dmb);
     s.append(acts);
     const page = el("button", "ghost cm-wide", "🌍 شوف منشوراته في المجتمع"); page.type = "button";
     page.onclick = () => {

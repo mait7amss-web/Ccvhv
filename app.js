@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 34; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 35; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -67,6 +67,7 @@ let openArenaId = null;        // structured debate opened from a notification
 let openArenaCode = null;      // invite code for a private debate (from a shared link)
 let openRoomId = null;         // match room opened from a notification
 let communityLink = null;      // community post/profile opened from a notification or a shared link
+let openDmId = null;           // direct-message conversation opened from a notification
 try { channel = localStorage.getItem("hala.channel") || channel; view = localStorage.getItem("hala.view") || view; } catch {}
 if (!CHANNELS.some(c => c.id === channel)) channel = CHANNELS[0].id;
 { // Opened from a notification: ?league=epl&view=pred
@@ -76,6 +77,7 @@ if (!CHANNELS.some(c => c.id === channel)) channel = CHANNELS[0].id;
   if (q.get("arena")) openArenaId = Number(q.get("arena")) || null;
   if (q.get("code")) openArenaCode = q.get("code");
   if (q.get("room")) openRoomId = Number(q.get("room")) || null;
+  if (q.get("dm")) openDmId = Number(q.get("dm")) || null;
   if (q.get("view") === "community") communityLink = { post: Number(q.get("post")) || null, user: q.get("user") || null, notifs: q.has("notifs") };
   if (q.get("u")) communityLink = { uname: q.get("u").replace(/^@/, "").toLowerCase() };
   if (q.has("league") || q.has("view") || q.has("u")) history.replaceState(null, "", location.pathname);
