@@ -254,7 +254,14 @@ function cmDrawThread(rootId, focusId) {
 
 function cmDrawProfile(uid, c) {
   const head = el("div", "cm-prof");
-  const av = avatarEl(uid); av.classList.add("big");
+  let av = avatarEl(uid); av.classList.add("big");
+  if (uid === me.id) {
+    // Tap your photo to change it
+    const wrap = el("button", "cm-avbtn"); wrap.type = "button"; wrap.setAttribute("aria-label", "غيّر صورتك");
+    wrap.append(av, el("span", "cm-cam", "📷"));
+    wrap.onclick = avatarSheet;
+    av = wrap;
+  }
   const info = el("div", "cm-pinfo");
   info.append(el("b", null, nameOf(uid)));
   const pill = teamPill(uid); if (pill) info.append(pill);
@@ -264,11 +271,16 @@ function cmDrawProfile(uid, c) {
     const f = el("button", following ? "ghost" : "primary cm-follow", following ? "تتابعه ✓" : "تابع"); f.type = "button";
     f.onclick = () => cmToggleFollow(uid, f);
     head.append(f);
-  } else {
-    const sv = el("button", "ghost", "🔖 محفوظاتي"); sv.type = "button"; sv.onclick = () => cmOpen("saved", null);
-    head.append(sv);
   }
   cmView.append(head);
+  if (uid === me.id) {
+    const acts = el("div", "cm-meacts");
+    const add = (label, fn) => { const b = el("button", "ghost", label); b.type = "button"; b.onclick = fn; acts.append(b); };
+    add("📷 صورتي", avatarSheet);
+    add("🔖 محفوظاتي", () => cmOpen("saved", null));
+    add("⚙️ الإعدادات", () => openSettings());
+    cmView.append(acts);
+  }
   const stats = el("div", "cm-stats");
   for (const [n, label] of [[c.posts, "منشور"], [c.followers, "متابع"], [c.following, "يتابع"], [c.takes_right, "رأي صدق ✅"]]) {
     const s = el("div"); s.append(el("b", null, arNum(n || 0)), el("span", null, label)); stats.append(s);
@@ -862,3 +874,62 @@ startChat = async function () {
 };
 const _drawLiveBannerCm = drawLiveBanner;
 drawLiveBanner = function () { _drawLiveBannerCm(); if (community) $("liveBanner").hidden = true; };
+
+/* ---------- my page: the top-left button opens it, settings move inside ---------- */
+const openSettings = $("meBtn").onclick;
+$("meBtn").onclick = () => {
+  setCommunity(true);
+  const pg = cmPage();
+  if (!(pg?.kind === "user" && pg.id === me.id)) cmStack.push({ kind: "user", id: me.id });
+  renderLeagues(); refreshView(true);
+};
+
+function avatarSheet() {
+  openSheet("📷 صورة البروفايل", (s) => {
+    s.append(el("p", "sheet-p", "اختر صورة من الاستديو. بتطلع للكل جنب اسمك."));
+    const file = el("input"); file.type = "file"; file.accept = "image/*"; file.hidden = true;
+    const pick = el("button", "primary", "🖼️ اختر من الاستديو"); pick.type = "button";
+    pick.onclick = () => file.click();
+    file.onchange = async () => {
+      const f = file.files[0]; file.value = "";
+      if (!f || !f.type.startsWith("image/")) return;
+      pick.disabled = true; pick.textContent = "يرفع…";
+      const msg = await setAvatar(f);
+      if (msg) { toast(msg); pick.disabled = false; pick.textContent = "🖼️ اختر من الاستديو"; return; }
+      closeSheet(); toast("✅ تغيّرت صورتك");
+    };
+    s.append(file, pick);
+    if (people[me.id]?.avatar_path) {
+      const del = el("button", "ghost cm-wide danger", "احذف الصورة"); del.type = "button";
+      del.onclick = async () => { del.disabled = true; await setAvatar(null); closeSheet(); toast("انحذفت الصورة"); };
+      s.append(del);
+    }
+    const c = el("button", "cancel", "إلغاء"); c.type = "button"; c.onclick = closeSheet; s.append(c);
+  });
+}
+// Square-crops to 512px JPEG, uploads to avatars/<my id>/, then points my profile at it.
+async function setAvatar(file) {
+  const old = people[me.id]?.avatar_path;
+  let path = null;
+  if (file) {
+    let blob;
+    try {
+      const bmp = await createImageBitmap(file);
+      const side = Math.min(bmp.width, bmp.height), size = Math.min(512, side);
+      const c = document.createElement("canvas"); c.width = c.height = size;
+      c.getContext("2d").drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+      blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.85));
+    } catch { return "ما قدرنا نقرأ الصورة. جرّب صورة ثانية."; }
+    if (!blob) return "ما قدرنا نقرأ الصورة.";
+    path = `${me.id}/${Date.now()}.jpg`;
+    const up = await sb.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg" });
+    if (up.error) return "ما انرفعت الصورة. تأكد من الاتصال.";
+  }
+  const { error } = await sb.from("profiles").update({ avatar_path: path }).eq("id", me.id);
+  if (error) return "ما انحفظت الصورة. جرّب مرة ثانية.";
+  if (old) sb.storage.from("avatars").remove([old]).catch(() => {});
+  people[me.id] = { ...(people[me.id] || {}), avatar_path: path };
+  const av = avatarEl(me.id); $("meAvatar").replaceWith(av); av.id = "meAvatar";
+  if (community) drawCommunity(false);
+  return null;
+}

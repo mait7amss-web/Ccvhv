@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 16; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 17; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -217,9 +217,10 @@ sb.auth.onAuthStateChange((event, session) => {
 async function loadPeople(ids, force) {
   const missing = [...new Set(ids)].filter(id => force || !(id in people));
   if (!missing.length) return;
-  const { data } = await sb.from("profiles").select("id,name,team").in("id", missing);
+  let { data, error } = await sb.from("profiles").select("id,name,team,avatar_path").in("id", missing);
+  if (error) ({ data } = await sb.from("profiles").select("id,name,team").in("id", missing));
   for (const id of missing) if (!people[id]) people[id] = { name: "", team: null };
-  for (const p of data || []) people[p.id] = { name: p.name, team: p.team };
+  for (const p of data || []) people[p.id] = { name: p.name, team: p.team, avatar_path: p.avatar_path || null };
 }
 const nameOf = (id) => people[id]?.name || "شخص";
 
@@ -231,11 +232,15 @@ function inkFor(hex) {
   const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
   return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? "#111" : "#fff";
 }
+// Profile photos live in the public "avatars" bucket.
+const avatarUrl = (path) => `${cfg.supabaseUrl}/storage/v1/object/public/avatars/${path}`;
 function avatarEl(id) {
   const av = el("div", "avatar", nameOf(id).trim().charAt(0));
   const t = TEAM_BY_ID[people[id]?.team];
   av.style.background = t ? t.color : colorFor(id);
   av.style.color = t ? inkFor(t.color) : "#fff";
+  const pic = people[id]?.avatar_path;
+  if (pic) { av.textContent = ""; av.classList.add("has-pic"); av.style.backgroundImage = `url("${avatarUrl(pic)}")`; }
   return av;
 }
 function teamPill(id) {
