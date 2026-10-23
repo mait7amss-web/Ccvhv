@@ -46,12 +46,3 @@ jobs:
         env:
           SUPABASE_URL: https://bnjwhkilboybexkdvufc.supabase.co
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-      - name: Match analysis by the official account (محلل هلا)
-        if: always()
-        run: |
-          npm install --no-save --no-package-lock @anthropic-ai/sdk@1.1.0
-          node scripts/analyze-matches.mjs
-        env:
-          SUPABASE_URL: https://bnjwhkilboybexkdvufc.supabase.co
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
