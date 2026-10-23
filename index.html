@@ -507,6 +507,14 @@ svg.pitch .pl { cursor: grab; }
 .ar-vote.b i { background: var(--flood); opacity: .2; }
 .ar-vote span, .ar-vote em { position: relative; font-style: normal; }
 .ar-vote em { color: var(--muted); font-size: 12.5px; }
+.ar-hbtns { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.ar-private { background: color-mix(in srgb, #e3c84a 12%, var(--card)); border: 1px solid #e3c84a; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; }
+.ar-private span { color: var(--muted); font-size: 12.5px; }
+.ar-code { font: 800 30px/1.2 ui-monospace, monospace; letter-spacing: 6px; color: #e3c84a; }
+.ar-invite { align-self: stretch; padding: 10px; font-size: 14px; color: var(--chalk); }
+.inv-row { display: flex; align-items: center; gap: 10px; padding: 6px 2px; }
+.inv-row b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-t { color: var(--muted); }
 .ar-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .ar-two label { min-width: 0; }
 .ar-two input { width: 100%; box-sizing: border-box; min-width: 0; }
@@ -868,8 +876,8 @@ body:has(#room:not([hidden])) .cm-fab { display: none; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=28"></script>
-<script src="tactics.js?v=28"></script>
-<script src="live.js?v=28"></script><script src="arena.js?v=28"></script><script src="community.js?v=28"></script><script src="league.js?v=28"></script><script src="tour.js?v=28"></script>
+<script src="app.js?v=29"></script>
+<script src="tactics.js?v=29"></script>
+<script src="live.js?v=29"></script><script src="arena.js?v=29"></script><script src="community.js?v=29"></script><script src="league.js?v=29"></script><script src="tour.js?v=29"></script>
 </body>
 </html>

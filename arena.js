@@ -68,6 +68,7 @@ async function loadArenaRoom(id) {
 
 /* ---------- the view ---------- */
 async function renderArenaView() {
+  if (openArenaCode) { const c = openArenaCode; openArenaCode = null; await sb.rpc("arena_by_code", { code: c }); }
   if (openArenaId) { arenaOpen = openArenaId; openArenaId = null; }
   if (!arenaClock) arSyncClock();
   if (arenaOpen) {
@@ -78,6 +79,77 @@ async function renderArenaView() {
   drawArena();
   startArenaTick();
 }
+// Open a debate from anywhere (community notification, code entry): switch to its league's debate tab
+function openArenaAnywhere(id, ch) {
+  closeSheet();
+  if (typeof setCommunity === "function") setCommunity(false);
+  openArenaId = id; view = "arena";
+  try { localStorage.setItem("hala.view", "arena"); } catch {}
+  openChannel(ch || channel);
+}
+function arenaCodeSheet() {
+  openSheet("🔑 ادخل بكود الدعوة", (s) => {
+    s.append(el("p", "sheet-p", "اكتب الكود اللي وصلك من صاحب النقاش (٦ حروف وأرقام)."));
+    const inp = textInput("arCode", 8); inp.placeholder = "مثال: 7KF3QA"; inp.style.textTransform = "uppercase"; inp.dir = "ltr";
+    s.append(inp);
+    sheetActions(s, "ادخل النقاش", async () => {
+      const code = inp.value.trim();
+      if (code.length < 4) return "اكتب الكود كامل.";
+      const { data, error } = await sb.rpc("arena_by_code", { code });
+      if (error || !data) return "الكود غلط أو النقاش انحذف.";
+      openArenaAnywhere(data.id, data.channel);
+    });
+  });
+}
+
+/* ---------- 📨 invite friends ---------- */
+async function arenaInviteSheet(a) {
+  if (typeof cmLoadBasics === "function") await cmLoadBasics().catch(() => {});
+  const follows = typeof cmFollowing !== "undefined" ? [...cmFollowing] : [];
+  await loadPeople(follows);
+  const sent = new Set();
+  openSheet("📨 ادعُ أصحابك للنقاش", (s) => {
+    s.append(el("p", "sheet-p", "يوصلهم إشعار فيه زر يدخلهم النقاش مباشرة" + (a.private ? "، حتى لو هو خاص." : ".")));
+    const inp = el("input"); inp.type = "search"; inp.placeholder = "دوّر بالاسم…"; inp.className = "fx-q";
+    const list = el("div", "fx-list");
+    s.append(inp, list);
+    const seated = new Set((arenaSeats[a.id] || []).map((x) => x.user_id));
+    const row = (uid) => {
+      const r = el("div", "inv-row");
+      r.append(avatarEl(uid), el("b", null, nameOf(uid)));
+      const b = el("button", "small" + (sent.has(uid) ? "" : " pri"), seated.has(uid) ? "جالس فيه" : sent.has(uid) ? "✅ انعزم" : "ادعُه"); b.type = "button";
+      b.disabled = seated.has(uid) || sent.has(uid);
+      b.onclick = async () => {
+        b.disabled = true;
+        const { error } = await sb.rpc("arena_invite", { a: a.id, target: uid });
+        if (error) { toast(/too many/.test(error.message) ? "عزمت ناس كثير على هالنقاش." : /closed/.test(error.message) ? "النقاش انتهى." : "ما انرسلت الدعوة."); b.disabled = false; return; }
+        sent.add(uid); b.textContent = "✅ انعزم"; b.classList.remove("pri");
+      };
+      r.append(b); return r;
+    };
+    const draw = (ids, title) => {
+      list.textContent = "";
+      if (title) list.append(el("small", "inv-t", title));
+      const show = ids.filter((id) => id !== me.id);
+      if (!show.length) list.append(el("p", "sheet-p", "ما لقينا أحد. دوّر باسم ثاني."));
+      for (const id of show) list.append(row(id));
+    };
+    draw(follows, follows.length ? "اللي تتابعهم" : "دوّر على أصحابك بالاسم 👆");
+    let timer = null;
+    inp.oninput = () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const q = inp.value.trim();
+        if (!q) return draw(follows, follows.length ? "اللي تتابعهم" : null);
+        const { data } = await sb.from("profiles").select("id,name,team").ilike("name", "%" + q.replace(/[%_]/g, "") + "%").limit(20);
+        for (const p of data || []) people[p.id] = { ...(people[p.id] || {}), name: p.name, team: p.team };
+        draw((data || []).map((p) => p.id));
+      }, 300);
+    };
+    const c = el("button", "cancel", "خلصت"); c.type = "button"; c.onclick = closeSheet; s.append(c);
+  });
+}
+
 function drawArena() {
   if (view !== "arena") return;
   arenaLastTurn = null;
@@ -89,7 +161,10 @@ function drawArenaList() {
   const head = el("div", "pane-head");
   const ht = el("div"); ht.append(el("h2", null, "🎙️ نقاش منظم"), el("p", null, "٣ ضد ٣ · دقيقة لكل متكلم · ٣٠ دقيقة ويقفل"));
   const add = el("button", "ghost", "+ نقاش جديد"); add.type = "button"; add.onclick = arenaCreateSheet;
-  head.append(ht, add); box.append(head);
+  const hb = el("div", "ar-hbtns");
+  const codeB = el("button", "ghost", "🔑 عندي كود"); codeB.type = "button"; codeB.onclick = arenaCodeSheet;
+  hb.append(add, codeB);
+  head.append(ht, hb); box.append(head);
   if (arenaMissing) {
     box.append(arEmpty("🛠️", "القسم يتجهز", "قريب بيشتغل إن شاء الله."));
     return;
@@ -114,7 +189,7 @@ function arEmpty(ico, title, text) {
 }
 function arenaCard(a) {
   const c = el("button", "ar-card"); c.type = "button";
-  c.append(el("div", "ar-topic", a.topic));
+  c.append(el("div", "ar-topic", (a.private ? "🔒 " : "") + a.topic));
   const vs = el("div", "ar-vs");
   vs.append(el("span", "ar-a", a.side_a), el("i", null, "×"), el("span", "ar-b", a.side_b));
   c.append(vs);
@@ -173,6 +248,22 @@ function drawArenaRoom(a) {
     teams.append(col);
   }
   box.append(teams);
+
+  // Private: show the code and link to the people inside
+  if (a.private && a.invite_code && (mySeat || a.created_by === me.id)) {
+    const pv = el("div", "ar-private");
+    pv.append(el("b", null, "🔒 نقاش خاص"), el("span", null, "يدخله بس اللي معه الكود أو الرابط:"));
+    const code = el("div", "ar-code", a.invite_code); code.dir = "ltr";
+    const cp = el("button", "small", "📋 انسخ الكود"); cp.type = "button";
+    cp.onclick = () => navigator.clipboard?.writeText(a.invite_code).then(() => toast("انسخ الكود ✅"), () => toast(a.invite_code));
+    const ln = el("button", "small pri", "🔗 شارك رابط الدعوة"); ln.type = "button"; ln.onclick = () => arenaShare(a);
+    const r = el("div", "ar-acts"); r.append(cp, ln);
+    pv.append(code, r); box.append(pv);
+  }
+  if (st.phase !== "closed" && (!a.private || mySeat || a.created_by === me.id)) {
+    const inv = el("button", "ghost ar-invite", "📨 ادعُ صديق للنقاش"); inv.type = "button"; inv.onclick = () => arenaInviteSheet(a);
+    box.append(inv);
+  }
 
   if (st.phase === "waiting") {
     const n = (arenaSeats[a.id] || []).length;
@@ -344,7 +435,7 @@ async function arRecDone(a, turn) {
 async function arenaJoin(a, side, btn) {
   btn.disabled = true;
   const { error } = await sb.rpc("arena_join", { a: a.id, my_side: side });
-  if (error) toast(/full/.test(error.message) ? "الفريق اكتمل." : /started/.test(error.message) ? "النقاش بدأ." : /banned/.test(error.message) ? "حسابك موقوف." : "ما قدرنا نضيفك. جرّب مرة ثانية.");
+  if (error) toast(/private/.test(error.message) ? "🔒 هذا نقاش خاص، تحتاج كود أو دعوة." : /full/.test(error.message) ? "الفريق اكتمل." : /started/.test(error.message) ? "النقاش بدأ." : /banned/.test(error.message) ? "حسابك موقوف." : "ما قدرنا نضيفك. جرّب مرة ثانية.");
   await loadArenaRoom(a.id); drawArena();
 }
 async function arenaLeave(a) {
@@ -366,8 +457,8 @@ function arenaDelete(a) {
   });
 }
 function arenaShare(a) {
-  const url = location.origin + location.pathname + `?league=${a.channel}&view=arena&arena=${a.id}`;
-  const text = `🎙️ نقاش منظم في مدرج هلا: ${a.topic}\n${a.side_a} ضد ${a.side_b} · ناقصنا لاعبين، تعال!`;
+  const url = location.origin + location.pathname + `?league=${a.channel}&view=arena&arena=${a.id}` + (a.private && a.invite_code ? `&code=${a.invite_code}` : "");
+  const text = `🎙️ نقاش منظم في مدرج هلا: ${a.topic}\n${a.side_a} ضد ${a.side_b} · ناقصنا لاعبين، تعال!` + (a.private && a.invite_code ? `\n🔑 الكود: ${a.invite_code}` : "");
   if (navigator.share) navigator.share({ title: "مدرج هلا", text, url }).catch(() => {});
   else navigator.clipboard?.writeText(text + "\n" + url).then(() => toast("انسخ الرابط ✅"), () => {});
 }
@@ -381,12 +472,14 @@ function arenaCreateSheet() {
     a.oninput = b.oninput = () => { const v = pick.value; sync(); pick.value = v; };
     sync();
     const two = el("div", "ar-two"); two.append(field("الفريق الأول", a), field("الفريق الثاني", b));
-    s.append(field("الموضوع", topic), two, field("أنت مع أي فريق؟", pick));
+    const privL = el("label", "tg"); const priv = el("input"); priv.type = "checkbox"; priv.id = "arPriv";
+    privL.append(el("span", null, "🔒 خاص: ما يطلع للكل، ويدخله بس اللي معه الكود أو الرابط"), priv);
+    s.append(field("الموضوع", topic), two, field("أنت مع أي فريق؟", pick), privL);
     sheetActions(s, "افتح النقاش", async () => {
       const t = topic.value.trim(), sa = a.value.trim(), sb2 = b.value.trim();
       if (t.length < 5) return "اكتب موضوع أوضح (٥ حروف على الأقل).";
       if (!sa || !sb2) return "اكتب اسم الفريقين.";
-      const { data, error } = await sb.rpc("arena_create", { ch: channel, t, a: sa, b: sb2, my_side: Number(pick.value) });
+      const { data, error } = await sb.rpc("arena_create", { ch: channel, t, a: sa, b: sb2, my_side: Number(pick.value), priv: priv.checked });
       if (error) return /too many/.test(error.message) ? "فتحت نقاشات كثير. انتظر شوي." : /banned/.test(error.message) ? "حسابك موقوف." : "ما قدرنا نفتح النقاش.";
       arenaOpen = data; await renderArenaView();
     });

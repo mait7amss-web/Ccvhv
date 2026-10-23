@@ -629,10 +629,14 @@ function cmReport(p) {
 }
 
 /* ---------- 🔔 notifications ---------- */
-const CM_NOTIF = { like: "❤️ أعجبه منشورك", reply: "💬 رد عليك", follow: "👤 صار يتابعك", repost: "🔁 أعاد نشر منشورك", quote: "✍️ اقتبس منشورك", mention: "📣 منشنك" };
+const CM_NOTIF = { like: "❤️ أعجبه منشورك", reply: "💬 رد عليك", follow: "👤 صار يتابعك", repost: "🔁 أعاد نشر منشورك", quote: "✍️ اقتبس منشورك", mention: "📣 منشنك", arena: "🎙️ يدعوك لنقاش منظم" };
+const cmArenas = {};   // arena id -> { topic, channel }
 async function cmLoadNotifs() {
-  const { data } = await sb.from("community_notifs").select("id,actor,kind,post_id,read,created_at").order("created_at", { ascending: false }).limit(60);
+  let { data, error } = await sb.from("community_notifs").select("id,actor,kind,post_id,read,created_at,arena_id").order("created_at", { ascending: false }).limit(60);
+  if (error) ({ data } = await sb.from("community_notifs").select("id,actor,kind,post_id,read,created_at").order("created_at", { ascending: false }).limit(60));
   const list = data || [];
+  const aids = [...new Set(list.map((n) => n.arena_id).filter(Boolean))];
+  if (aids.length) { const { data: ar } = await sb.from("arenas").select("id,topic,channel").in("id", aids); for (const x of ar || []) cmArenas[x.id] = x; }
   const pids = [...new Set(list.map((n) => n.post_id).filter((id) => id && !cmPosts[id]))];
   if (pids.length) { const { data: ps } = await sb.from("posts").select(CM_COLS).in("id", pids); for (const p of ps || []) cmPosts[p.id] = p; }
   await loadPeople(list.map((n) => n.actor));
@@ -652,8 +656,11 @@ function cmDrawNotifs(list) {
     txt.append(el("b", null, nameOf(n.actor) + " "), CM_NOTIF[n.kind] || "");
     const p = n.post_id && cmPosts[n.post_id];
     if (p?.body) txt.append(el("div", "s", p.body.length > 90 ? p.body.slice(0, 89) + "…" : p.body));
+    const ar = n.arena_id && cmArenas[n.arena_id];
+    if (ar) txt.append(el("div", "s", ar.topic));
     row.append(avatarEl(n.actor), txt, el("span", "post-time", cmAgo(n.created_at)));
-    row.onclick = () => (n.kind === "follow" || !n.post_id ? cmOpen("user", n.actor) : cmOpen("thread", n.post_id));
+    row.onclick = () => n.kind === "arena" ? (ar ? openArenaAnywhere(n.arena_id, ar.channel) : toast("النقاش انحذف."))
+      : (n.kind === "follow" || !n.post_id ? cmOpen("user", n.actor) : cmOpen("thread", n.post_id));
     cmView.append(row);
   }
 }

@@ -195,7 +195,7 @@ async function arenaStart(arenaId: number) {
 
 // Community: someone replied to you, mentioned you, followed you or quoted your post.
 async function communityNotif(notifId: number) {
-  const { data: n } = await sb.from("community_notifs").select("id,user_id,actor,kind,post_id").eq("id", notifId).maybeSingle();
+  const { data: n } = await sb.from("community_notifs").select("id,user_id,actor,kind,post_id,arena_id").eq("id", notifId).maybeSingle();
   if (!n) return new Response("gone", { status: 200 });
   const [{ data: actor }, { data: post }, { data: subs }] = await Promise.all([
     sb.from("profiles").select("name").eq("id", n.actor).maybeSingle(),
@@ -204,6 +204,13 @@ async function communityNotif(notifId: number) {
   ]);
   if (!subs?.length) return new Response("no devices", { status: 200 });
   const name = actor?.name || "شخص";
+  if (n.kind === "arena") {
+    const { data: ar } = await sb.from("arenas").select("id,topic,channel").eq("id", n.arena_id).maybeSingle();
+    if (!ar) return new Response("gone", { status: 200 });
+    const payload = JSON.stringify({ title: `🎙️ ${name} يدعوك لنقاش منظم`, body: `${ar.topic} · ادخل واحجز مقعدك`, url: `./?league=${ar.channel}&view=arena&arena=${ar.id}`, tag: `arena-inv-${ar.id}` });
+    await Promise.all(subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 3600 }).catch(() => {})));
+    return new Response("arena invite sent", { status: 200 });
+  }
   const title = { reply: `💬 ${name} رد عليك`, mention: `📣 ${name} منشنك`, follow: `👤 ${name} صار يتابعك`, quote: `✍️ ${name} اقتبس منشورك` }[n.kind as string] || `🌍 ${name}`;
   const text = post?.body ? (post.body.length > 140 ? post.body.slice(0, 139) + "…" : post.body) : n.kind === "follow" ? "شوف صفحته في المجتمع" : "افتح المجتمع";
   const url = n.kind === "follow" ? `./?view=community&user=${n.actor}` : `./?view=community&post=${n.post_id}`;
