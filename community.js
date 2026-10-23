@@ -1,11 +1,12 @@
 /* ---------- 🌍 المجتمع العام: منشورات للجميع مثل تويتر، ومعها "رأي جريء" ----------
    Lives above the leagues as its own chip. Data and rules are in supabase/community.sql. */
 
-const CM_COLS = "id,user_id,body,image_path,gif_url,audio_path,audio_secs,poll,take_match_id,reply_to,root_id,quote_of,mentions,tags,like_count,reply_count,repost_count,hidden,created_at";
+const CM_COLS = "id,user_id,body,image_path,gif_url,audio_path,audio_secs,poll,take_match_id,reply_to,root_id,quote_of,mentions,tags,like_count,reply_count,repost_count,view_count,hidden,created_at";
 const CM_PAGE = 25;
 const cmPosts = {};                 // id -> post
 const cmFeeds = {};                 // key -> { ids: [], done: bool }
 const cmLiked = new Set();          // post ids I liked
+const cmSaved = new Set();          // post ids I bookmarked
 const cmPoll = {};                  // post id -> { user_id: option }
 const cmTakeVotes = {};             // post id -> [{ user_id, agree }]
 const cmVerdicts = {};              // post id -> [{ user_id, came_true }]
@@ -110,6 +111,15 @@ async function cmHydrate(list) {
 }
 
 async function cmLoadFeed(key, more) {
+  if (key === "saved") {
+    const { data: bm, error } = await sb.from("bookmarks").select("post_id,created_at").eq("user_id", me.id).order("created_at", { ascending: false }).limit(100);
+    if (error) { cmMissing = true; return; }
+    const ids = (bm || []).map((b) => b.post_id);
+    const { data } = ids.length ? await sb.from("posts").select(CM_COLS).in("id", ids) : { data: [] };
+    await cmHydrate(data || []);
+    cmFeeds.saved = { ids: ids.filter((id) => cmPosts[id]), done: true };
+    return;
+  }
   const feed = (cmFeeds[key] ||= { ids: [], done: false });
   if (more && feed.done) return;
   let q = sb.from("posts").select(CM_COLS).order("created_at", { ascending: false }).limit(CM_PAGE);
@@ -145,10 +155,12 @@ async function cmLoadThread(id) {
 async function cmLoadBasics() {
   if (cmLoaded) return;
   cmLoaded = true;
-  const [{ data: fol }, { count }] = await Promise.all([
+  const [{ data: fol }, { count }, { data: saved }] = await Promise.all([
     sb.from("follows").select("followee").eq("follower", me.id),
     sb.from("community_notifs").select("id", { count: "exact", head: true }).eq("read", false),
+    sb.from("bookmarks").select("post_id").eq("user_id", me.id).limit(2000),
   ]);
+  for (const b of saved || []) cmSaved.add(b.post_id);
   cmFollowing = new Set((fol || []).map((f) => f.followee));
   cmSetUnread(count || 0);
 }
@@ -175,6 +187,7 @@ async function drawCommunity(jump) {
   let draw;
   if (page?.kind === "thread") { const rootId = await cmLoadThread(page.id); draw = () => cmDrawThread(rootId, page.id); }
   else if (page?.kind === "user") { await Promise.all([cmLoadFeed("user:" + page.id), loadPeople([page.id])]); const { data } = await sb.rpc("profile_counts", { u: page.id }); draw = () => cmDrawProfile(page.id, data || {}); }
+  else if (page?.kind === "saved") { await cmLoadFeed("saved"); draw = () => cmDrawFeed("saved", "🔖 محفوظاتي"); }
   else if (page?.kind === "tag") { await cmLoadFeed("tag:" + page.id); draw = () => cmDrawFeed("tag:" + page.id, "#" + page.id); }
   else if (cmTab === "trend") { const [{ data: tags }] = await Promise.all([sb.rpc("trending_tags"), cmLoadFeed("takes")]); draw = () => cmDrawTrend(tags || []); }
   else if (cmTab === "notifs") { const list = await cmLoadNotifs(); draw = () => cmDrawNotifs(list); }
@@ -205,6 +218,7 @@ function cmDrawFeed(key, title) {
   if (!list.length) {
     cmView.append(key === "following"
       ? cmEmpty("👥", "ما تتابع أحد للحين", "تابع الناس اللي يعجبك كلامهم من صفحاتهم، ومنشوراتهم بتطلع هنا.")
+      : key === "saved" ? cmEmpty("🔖", "ما حفظت شي للحين", "اضغط علامة الحفظ تحت أي منشور، ويطلع لك هنا.")
       : cmEmpty("🌍", "كن أول واحد ينشر", "اكتب رأيك، نزّل صورة، أو تحدّى الكل برأي جريء 🔥"));
     return;
   }
@@ -250,6 +264,9 @@ function cmDrawProfile(uid, c) {
     const f = el("button", following ? "ghost" : "primary cm-follow", following ? "تتابعه ✓" : "تابع"); f.type = "button";
     f.onclick = () => cmToggleFollow(uid, f);
     head.append(f);
+  } else {
+    const sv = el("button", "ghost", "🔖 محفوظاتي"); sv.type = "button"; sv.onclick = () => cmOpen("saved", null);
+    head.append(sv);
   }
   cmView.append(head);
   const stats = el("div", "cm-stats");
@@ -437,26 +454,78 @@ function takeVotesEl(p) {
 }
 
 /* ---------- actions ---------- */
+// Line icons, X-style. Order in RTL (right to left): repost, reply, like, views, save, share.
+const CM_ICONS = {
+  repost: '<path d="M17 2.5l3 3-3 3"/><path d="M20 5.5H9a4 4 0 0 0-4 4V11"/><path d="M7 21.5l-3-3 3-3"/><path d="M4 18.5h11a4 4 0 0 0 4-4V13"/>',
+  reply: '<path d="M12 3.5c4.7 0 8.5 3.3 8.5 7.6s-3.8 7.6-8.5 7.6c-1 0-2-.1-2.9-.4L4.5 20.5l1.3-3.7C4.4 15.4 3.5 13.4 3.5 11.1 3.5 6.8 7.3 3.5 12 3.5z"/><path d="M8.5 11h7"/>',
+  like: '<path d="M12 20.3s-7.8-4.6-7.8-10.3A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.8 2.4c0 5.7-7.8 10.3-7.8 10.3z"/>',
+  views: '<path d="M5.5 20V12.5"/><path d="M12 20V5"/><path d="M18.5 20v-9"/>',
+  save: '<path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/>',
+  share: '<path d="M12 15V3.5"/><path d="M7.5 8L12 3.5 16.5 8"/><path d="M4.5 13.5v5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5"/>',
+};
+function cmIcon(name) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true"); svg.classList.add("i");
+  svg.innerHTML = CM_ICONS[name];
+  return svg;
+}
 function postActions(p) {
   const row = el("div", "post-acts");
   const act = (ico, n, cls, fn, label) => {
-    const b = el("button", "pa " + (cls || "")); b.type = "button"; b.setAttribute("aria-label", label);
-    b.append(el("span", "i", ico), el("span", "n", n ? arNum(n) : ""));
+    const b = el("button", "pa " + ico + " " + (cls || "")); b.type = "button"; b.setAttribute("aria-label", label);
+    b.append(cmIcon(ico), el("span", "n", n ? cmShort(n) : ""));
     b.onclick = (e) => { e.stopPropagation(); fn(b); };
     row.append(b);
   };
-  act("💬", p.reply_count, "", () => composeSheet({ reply: p }), "رد");
-  act("🔁", p.repost_count, "", () => repostSheet(p), "إعادة نشر");
-  act(cmLiked.has(p.id) ? "❤️" : "🤍", p.like_count, cmLiked.has(p.id) ? "on" : "", (b) => cmToggleLike(p, b), "إعجاب");
-  act("📤", 0, "", () => cmShare(p), "مشاركة");
+  act("repost", p.repost_count, "", () => repostSheet(p), "إعادة نشر");
+  act("reply", p.reply_count, "", () => composeSheet({ reply: p }), "رد");
+  act("like", p.like_count, cmLiked.has(p.id) ? "on" : "", (b) => cmToggleLike(p, b), "إعجاب");
+  act("views", p.view_count, "", () => toast(`👀 شافه ${arNum(p.view_count || 0)} شخص`), "المشاهدات");
+  act("save", 0, cmSaved.has(p.id) ? "on" : "", (b) => cmToggleSave(p, b), "حفظ");
+  act("share", 0, "", () => cmShare(p), "مشاركة");
+  cmWatch(row, p);
   return row;
 }
+// 1200 → 1.2K style, in Arabic digits
+function cmShort(n) {
+  if (n < 1000) return arNum(n);
+  if (n < 1e6) return arNum(+(n / 1000).toFixed(n < 1e4 ? 1 : 0)) + "K";
+  return arNum(+(n / 1e6).toFixed(1)) + "M";
+}
+async function cmToggleSave(p, b) {
+  const on = !cmSaved.has(p.id);
+  if (on) cmSaved.add(p.id); else cmSaved.delete(p.id);
+  b.classList.toggle("on", on);
+  toast(on ? "🔖 انحفظ في محفوظاتك" : "انشال من المحفوظات");
+  const { error } = on
+    ? await sb.from("bookmarks").insert({ post_id: p.id, user_id: me.id })
+    : await sb.from("bookmarks").delete().eq("post_id", p.id).eq("user_id", me.id);
+  if (error && error.code !== "23505") toast("ما انحفظ. جرّب مرة ثانية.");
+  delete cmFeeds.saved;
+}
+
+/* ---------- views: a post counts once per person, when it shows on screen ---------- */
+const cmSeen = new Set(), cmSeenQueue = new Set();
+const cmObserver = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    const id = Number(e.target.dataset.pid); cmObserver.unobserve(e.target);
+    const p = cmPosts[id];
+    if (!p || cmSeen.has(id) || p.user_id === me.id) continue;
+    cmSeen.add(id); cmSeenQueue.add(id);
+  }
+}, { threshold: 0.6 }) : null;
+function cmWatch(row, p) { if (cmObserver && !cmSeen.has(p.id)) { row.dataset.pid = p.id; cmObserver.observe(row); } }
+setInterval(() => {
+  if (!cmSeenQueue.size) return;
+  const ids = [...cmSeenQueue]; cmSeenQueue.clear();
+  sb.rpc("post_seen", { ids }).then(() => {}, () => {});
+}, 4000);
 async function cmToggleLike(p, b) {
   const on = !cmLiked.has(p.id);
   if (on) { cmLiked.add(p.id); p.like_count++; } else { cmLiked.delete(p.id); p.like_count = Math.max(0, p.like_count - 1); }
   b.classList.toggle("on", on);
-  b.querySelector(".i").textContent = on ? "❤️" : "🤍";
-  b.querySelector(".n").textContent = p.like_count ? arNum(p.like_count) : "";
+  b.querySelector(".n").textContent = p.like_count ? cmShort(p.like_count) : "";
   if (on) { b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); }
   const { error } = on
     ? await sb.from("post_likes").insert({ post_id: p.id, user_id: me.id })

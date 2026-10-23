@@ -542,11 +542,17 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 .post-img { width: 100%; max-height: 420px; object-fit: cover; border-radius: 12px; background: var(--pitch-2); }
 .post-quote { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; font-size: 13.5px; display: flex; flex-direction: column; gap: 2px; color: var(--muted); overflow-wrap: anywhere; cursor: pointer; }
 .post-quote b { color: var(--chalk); font-size: 13px; }
-.post-acts { display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 4px; }
-.pa { border: 0; background: none; color: var(--muted); font: 700 13px var(--body); display: flex; align-items: center; gap: 5px; padding: 6px 8px; cursor: pointer; border-radius: 999px; min-width: 52px; justify-content: center; }
-.pa .i { font-size: 16px; line-height: 1; }
-.pa.on { color: #ff5d73; }
-.pa.pop .i { animation: cmPop .35s ease-out; }
+.post-acts { display: flex; justify-content: space-between; align-items: center; padding: 2px 2px 0; }
+.pa { border: 0; background: none; color: #8b98a5; font: 500 13.5px var(--body); display: flex; align-items: center; gap: 4px; padding: 6px 4px; cursor: pointer; border-radius: 999px; min-width: 0; font-variant-numeric: tabular-nums; -webkit-tap-highlight-color: transparent; }
+.pa svg.i { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.pa .n:empty { display: none; }
+.pa.like.on { color: #f91880; }
+.pa.like.on svg.i { fill: #f91880; }
+.pa.save.on { color: #f2b134; }
+.pa.save.on svg.i { fill: #f2b134; }
+.pa.repost:active { color: #00ba7c; }
+.pa.reply:active { color: #1d9bf0; }
+.pa.pop svg.i { animation: cmPop .35s ease-out; }
 @keyframes cmPop { 40% { transform: scale(1.45); } }
 .cm-repost { display: flex; flex-direction: column; gap: 4px; }
 .cm-rpby { align-self: flex-start; border: 0; background: none; color: var(--muted); font: 700 12.5px var(--body); cursor: pointer; padding: 0 6px; }
@@ -714,8 +720,8 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=15"></script>
-<script src="tactics.js?v=15"></script>
-<script src="live.js?v=15"></script><script src="arena.js?v=15"></script><script src="community.js?v=15"></script>
+<script src="app.js?v=16"></script>
+<script src="tactics.js?v=16"></script>
+<script src="live.js?v=16"></script><script src="arena.js?v=16"></script><script src="community.js?v=16"></script>
 </body>
 </html>
