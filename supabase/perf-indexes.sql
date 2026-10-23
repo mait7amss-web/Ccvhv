@@ -1,0 +1,30 @@
+-- مدرج هلا: فهارس للأعمدة اللي التطبيق يدوّر فيها كثير (تخلي الاستعلامات سريعة لما يكبر عدد المشتركين)
+-- آمن لو انشغل أكثر من مرة.
+create index if not exists predictions_user_idx on public.predictions (user_id);
+create index if not exists motm_picks_user_idx on public.motm_picks (user_id);
+create index if not exists player_ratings_user_idx on public.player_ratings (user_id);
+create index if not exists reactions_user_idx on public.reactions (user_id);
+create index if not exists messages_user_idx on public.messages (user_id);
+create index if not exists messages_reply_idx on public.messages (reply_to);
+create index if not exists posts_reply_to_idx on public.posts (reply_to);
+create index if not exists posts_quote_of_idx on public.posts (quote_of);
+create index if not exists posts_take_match_idx on public.posts (take_match_id) where take_match_id is not null;
+create index if not exists posts_match_idx on public.posts (match_id) where match_id is not null;
+create index if not exists community_notifs_actor_idx on public.community_notifs (actor);
+create index if not exists community_notifs_post_idx on public.community_notifs (post_id);
+create index if not exists blocks_blocked_idx on public.blocks (blocked);
+create index if not exists league_members_user_idx on public.league_members (user_id);
+create index if not exists push_subscriptions_user_idx on public.push_subscriptions (user_id);
+create index if not exists dm_messages_sender_idx on public.dm_messages (sender, created_at desc);
+create index if not exists arena_seats_user_idx on public.arena_seats (user_id);
+create index if not exists arena_votes_user_idx on public.arena_votes (user_id);
+create index if not exists arena_turns_user_idx on public.arena_turns (user_id);
+create index if not exists post_views_user_idx on public.post_views (user_id);
+create index if not exists post_poll_votes_user_idx on public.post_poll_votes (user_id);
+create index if not exists poll_votes_user_idx on public.poll_votes (user_id);
+create index if not exists take_votes_user_idx on public.take_votes (user_id);
+create index if not exists take_verdicts_user_idx on public.take_verdicts (user_id);
+create index if not exists live_reactions_user_idx on public.live_reactions (user_id);
+create index if not exists momentum_user_idx on public.momentum (user_id);
+create index if not exists matches_channel_kickoff_idx on public.matches (channel, kickoff desc);
+analyze;
