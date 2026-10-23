@@ -26,6 +26,7 @@ async function api(path) {
   apiCalls++;
   const r = await fetch(`https://v3.football.api-sports.io/${path}`, { headers: { "x-apisports-key": API_FOOTBALL_KEY } });
   const j = await r.json();
+  if (j.errors?.plan) { console.log("API-Football plan doesn't cover this (free plans skip the current season):", j.errors.plan); process.exit(0); }
   if (j.errors && Object.keys(j.errors).length) throw new Error(`API-Football ${path}: ${JSON.stringify(j.errors)}`);
   return j.response || [];
 }
