@@ -83,9 +83,12 @@ refreshView = async function (jump) {
 async function cmHydrate(list) {
   const fresh = list.filter(Boolean);
   for (const p of fresh) cmPosts[p.id] = p;
-  // Quoted posts
+  // Quoted posts (fetched alongside everything else; their extras follow once they arrive)
   const qids = [...new Set(fresh.map((p) => p.quote_of).filter((id) => id && !cmPosts[id]))];
-  if (qids.length) { const { data } = await sb.from("posts").select(CM_COLS).in("id", qids); for (const p of data || []) { cmPosts[p.id] = p; fresh.push(p); } }
+  const quotes = qids.length
+    ? sb.from("posts").select(CM_COLS).in("id", qids).then(({ data }) => data?.length ? cmHydrate(data) : null)
+    : null;
+  const people0 = loadPeople(fresh.flatMap((p) => [p.user_id, ...(p.mentions || [])])).catch(() => {});
   const ids = fresh.map((p) => p.id);
   const polls = fresh.filter((p) => p.poll).map((p) => p.id);
   const takes = fresh.filter((p) => p.take_match_id).map((p) => p.id);
@@ -105,11 +108,20 @@ async function cmHydrate(list) {
   for (const x of vd.data || []) cmVerdicts[x.post_id].push(x);
   for (const m of ms.data || []) cmMatches[m.id] = m;
   await Promise.all([
-    loadPeople(fresh.flatMap((p) => [p.user_id, ...(p.mentions || [])])),
+    people0, quotes,
     signUrls(fresh.filter((p) => p.image_path).map((p) => p.image_path)),
   ]).catch(() => {});
 }
 
+// One request per feed at a time (the startup prefetch and the first draw share it)
+const cmFeedJobs = {};
+function cmLoadFeedOnce(key) { return (cmFeedJobs[key] ||= cmLoadFeed(key).finally(() => { delete cmFeedJobs[key]; })); }
+// Called at the very start of the app, before the profile has loaded, to save a round trip
+function cmPrefetch() {
+  if (!community || cmPage() || !["all", "following"].includes(cmTab)) return;
+  cmLoadBasics();
+  if (cmTab === "all" && !cmFeeds.all) cmLoadFeedOnce("all");
+}
 async function cmLoadFeed(key, more) {
   if (key === "saved") {
     const { data: bm, error } = await sb.from("bookmarks").select("post_id,created_at").eq("user_id", me.id).order("created_at", { ascending: false }).limit(100);
@@ -153,8 +165,10 @@ async function cmLoadThread(id) {
   return rootId;
 }
 
-async function cmLoadBasics() {
-  if (cmLoaded) return;
+// Shared: every caller waits for the same request instead of skipping ahead of it
+let cmBasicsJob = null;
+function cmLoadBasics() { return (cmBasicsJob ||= cmLoadBasicsNow()); }
+async function cmLoadBasicsNow() {
   cmLoaded = true;
   const [{ data: fol }, { count }, { data: saved }] = await Promise.all([
     sb.from("follows").select("followee").eq("follower", me.id),
@@ -187,7 +201,8 @@ async function drawCommunity(jump) {
   }
   for (const b of cmTabs.children) b.setAttribute("aria-pressed", String(!cmPage() && b.dataset.tab === cmTab));
   cmFab.hidden = !community || cmPage()?.kind === "thread";
-  await cmLoadBasics();
+  const basics = cmLoadBasics();
+  if (cmTab === "following" || cmPage()) await basics;
   const page = cmPage();
   if (jump) { cmView.textContent = ""; cmView.append(el("div", "cm-loading", "يحمّل…")); }
   let draw;
@@ -199,7 +214,8 @@ async function drawCommunity(jump) {
   else if (page?.kind === "tag") { await cmLoadFeed("tag:" + page.id); draw = () => cmDrawFeed("tag:" + page.id, "#" + page.id); }
   else if (cmTab === "trend") { const [{ data: tags }] = await Promise.all([sb.rpc("trending_tags"), cmLoadFeed("takes")]); draw = () => cmDrawTrend(tags || []); }
   else if (cmTab === "notifs") { const list = await cmLoadNotifs(); draw = () => cmDrawNotifs(list); }
-  else { if (!cmFeeds[cmTab]) await cmLoadFeed(cmTab); draw = () => cmDrawFeed(cmTab); }
+  else { if (cmFeedJobs[cmTab]) await cmFeedJobs[cmTab]; else if (!cmFeeds[cmTab]) await cmLoadFeedOnce(cmTab); draw = () => cmDrawFeed(cmTab); }
+  await basics;
   if (seq !== cmDrawSeq || !community) return;
   cmView.textContent = "";
   if (cmMissing) { cmView.append(cmEmpty("🛠️", "المجتمع يتجهز", "قريب بيشتغل إن شاء الله.")); return; }

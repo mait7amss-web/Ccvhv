@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 43; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 44; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -227,19 +227,33 @@ sb.auth.onAuthStateChange((event, session) => {
 });
 
 /* ---------- People ---------- */
+// Loads names, photos and levels. Ids already on their way are shared, so the same person is never
+// fetched twice at once, and the profile and level requests run side by side.
+const peopleLoading = new Map();   // id -> promise
 async function loadPeople(ids, force) {
-  const missing = [...new Set(ids)].filter(id => force || !(id in people));
-  if (!missing.length) return;
-  let data, error;
-  for (const cols of ["id,name,team,avatar_path,username,verified", "id,name,team,avatar_path,username", "id,name,team,avatar_path", "id,name,team"]) {
-    ({ data, error } = await sb.from("profiles").select(cols).in("id", missing));
-    if (!error) break;
+  const uniq = [...new Set(ids)].filter(Boolean);
+  const waits = uniq.filter((id) => !force && peopleLoading.has(id)).map((id) => peopleLoading.get(id));
+  const missing = uniq.filter((id) => force || (!(id in people) && !peopleLoading.has(id)));
+  if (missing.length) {
+    const job = (async () => {
+      const profiles = (async () => {
+        for (const cols of ["id,name,team,avatar_path,username,verified", "id,name,team,avatar_path,username", "id,name,team,avatar_path", "id,name,team"]) {
+          const { data, error } = await sb.from("profiles").select(cols).in("id", missing);
+          if (!error) return data || [];
+        }
+        return [];
+      })();
+      const [data, lv] = await Promise.all([profiles, sb.rpc("user_levels", { ids: missing }).then((r) => r.data || [], () => [])]);
+      for (const id of missing) if (!people[id]) people[id] = { name: "", team: null };
+      for (const p of data) people[p.id] = { ...people[p.id], name: p.name, team: p.team, avatar_path: p.avatar_path || null, username: p.username || null, verified: !!p.verified };
+      // Level points for the badges next to names
+      for (const x of lv) if (people[x.id]) people[x.id].xp = x.xp;
+    })();
+    for (const id of missing) peopleLoading.set(id, job);
+    job.finally(() => { for (const id of missing) if (peopleLoading.get(id) === job) peopleLoading.delete(id); });
+    waits.push(job);
   }
-  for (const id of missing) if (!people[id]) people[id] = { name: "", team: null };
-  for (const p of data || []) people[p.id] = { name: p.name, team: p.team, avatar_path: p.avatar_path || null, username: p.username || null, verified: !!p.verified };
-  // Level points for the badges next to names
-  const { data: lv } = await sb.rpc("user_levels", { ids: missing });
-  for (const x of lv || []) if (people[x.id]) people[x.id].xp = x.xp;
+  await Promise.all(waits);
 }
 const nameOf = (id) => people[id]?.name || "شخص";
 
@@ -322,12 +336,17 @@ function rerenderIfShown(ch) { if (ch === channel && view === "chat") render(fal
 async function startChat() {
   show("chat");
   renderLeagues();
-  await loadPeople([me.id]);
-  renderMe();
-  const [bl, ad] = await Promise.all([
+  // Start loading the first screen right away, side by side with the profile
+  try {
+    if (typeof community !== "undefined" && community) cmPrefetch();
+    else if (view !== "arena") loadMatches(channel).catch(() => {});
+  } catch {}
+  const [, bl, ad] = await Promise.all([
+    loadPeople([me.id]),
     sb.from("blocks").select("blocked"),
     sb.from("admins").select("user_id").eq("user_id", me.id).maybeSingle(),
   ]);
+  renderMe();
   blocked.clear(); for (const b of bl.data || []) blocked.add(b.blocked);
   isAdmin = Boolean(ad.data);
   realtime?.unsubscribe();
@@ -1001,25 +1020,34 @@ function adminSheet() {
 }
 
 /* ---------- Matches & predictions ---------- */
-async function loadMatches(ch) {
+// One request per league at a time: a second caller waits for the one already running
+const matchesLoading = {};
+function loadMatches(ch) {
+  if (!matchesLoading[ch]) matchesLoading[ch] = loadMatchesNow(ch).finally(() => { delete matchesLoading[ch]; });
+  return matchesLoading[ch];
+}
+async function loadMatchesNow(ch) {
   const MBASE = "id,channel,created_by,home,away,kickoff,home_score,away_score,status,external_id";
   let matches, error;
   for (const cols of [MBASE + ",lineups,events,live_home,live_away,minute,stats,players,live_at", MBASE + ",lineups,events", MBASE]) {
-    ({ data: matches, error } = await sb.from("matches").select(cols).eq("channel", ch).order("kickoff", { ascending: false }).limit(150));
+    // Only the matches around today (last 10 days, next 3 weeks): far lighter than the whole season
+    ({ data: matches, error } = await sb.from("matches").select(cols).eq("channel", ch)
+      .gt("kickoff", new Date(Date.now() - 10 * 86400000).toISOString()).lt("kickoff", new Date(Date.now() + 21 * 86400000).toISOString())
+      .order("kickoff", { ascending: false }).limit(80));
     if (!error) break;
   }
   for (const m of matches || []) matchCache[m.id] = m;
   if (error) { matchData[ch] = { matches: [], preds: {}, error: true }; return; }
   const ids = matches.map(m => m.id);
-  const { data: preds } = ids.length
-    ? await sb.from("predictions").select("match_id,user_id,home,away").in("match_id", ids)
-    : { data: [] };
+  const [{ data: preds }, { data: mp }] = ids.length
+    ? await Promise.all([
+        sb.from("predictions").select("match_id,user_id,home,away").in("match_id", ids),
+        sb.from("motm_picks").select("match_id,player").eq("user_id", me.id).in("match_id", ids),
+      ])
+    : [{ data: [] }, { data: [] }];
   const byMatch = {};
   for (const p of preds || []) (byMatch[p.match_id] ||= []).push(p);
-  if (ids.length) {
-    const { data: mp } = await sb.from("motm_picks").select("match_id,player").eq("user_id", me.id).in("match_id", ids);
-    for (const x of mp || []) motmMine[x.match_id] = x.player;
-  }
+  for (const x of mp || []) motmMine[x.match_id] = x.player;
   matchData[ch] = { matches, preds: byMatch };
   await loadPeople([...matches.map(m => m.created_by), ...(preds || []).map(p => p.user_id)].filter(Boolean));
 }
