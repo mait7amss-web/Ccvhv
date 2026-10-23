@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 35; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 36; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -231,12 +231,12 @@ async function loadPeople(ids, force) {
   const missing = [...new Set(ids)].filter(id => force || !(id in people));
   if (!missing.length) return;
   let data, error;
-  for (const cols of ["id,name,team,avatar_path,username", "id,name,team,avatar_path", "id,name,team"]) {
+  for (const cols of ["id,name,team,avatar_path,username,verified", "id,name,team,avatar_path,username", "id,name,team,avatar_path", "id,name,team"]) {
     ({ data, error } = await sb.from("profiles").select(cols).in("id", missing));
     if (!error) break;
   }
   for (const id of missing) if (!people[id]) people[id] = { name: "", team: null };
-  for (const p of data || []) people[p.id] = { name: p.name, team: p.team, avatar_path: p.avatar_path || null, username: p.username || null };
+  for (const p of data || []) people[p.id] = { name: p.name, team: p.team, avatar_path: p.avatar_path || null, username: p.username || null, verified: !!p.verified };
   // Level points for the badges next to names
   const { data: lv } = await sb.rpc("user_levels", { ids: missing });
   for (const x of lv || []) if (people[x.id]) people[x.id].xp = x.xp;
@@ -267,6 +267,9 @@ function teamPill(id) {
   if (!t) return null;
   const p = el("span", "team", t.name);
   p.style.background = t.color; p.style.color = inkFor(t.color);
+  // Tap a club to open its page
+  p.onclick = (e) => { if (typeof openTeam !== "function") return; e.stopPropagation(); openTeam(t.id); };
+  p.style.cursor = "pointer";
   return p;
 }
 function renderMe() {

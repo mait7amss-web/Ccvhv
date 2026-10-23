@@ -862,6 +862,43 @@ button.lvl { width: 100%; border: 0; background: none; color: inherit; font: inh
 .cm-pbtns { display: flex; gap: 6px; align-items: center; flex: none; }
 .cm-dmbtn { padding: 8px 10px; font-size: 16px; }
 body.dm-on .cm-fab, body:has(#dmPane:not([hidden])) .cm-fab { display: none; }
+/* ---------- صفحة الفريق والبحث والحساب الرسمي ---------- */
+.vbadge { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #1d9bf0; color: #fff; font-size: 11px; font-weight: 900; flex: none; vertical-align: middle; margin-inline-start: 4px; }
+.avatar.official { background-size: cover; background-color: #0b1a10 !important; }
+.post-auto { display: block; width: 100%; margin-top: 8px; border: 1px solid var(--line); background: var(--pitch-2); color: var(--chalk); border-radius: 12px; padding: 9px 12px; font: 700 13.5px var(--body); cursor: pointer; text-align: center; }
+.tm-head { border-radius: 18px; padding: 18px 16px 16px; margin: 10px 0 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; box-shadow: 0 6px 22px rgba(0,0,0,.35); }
+.tm-crest { width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,.18); border: 2px solid currentColor; display: grid; place-items: center; font: 400 30px/1 var(--display); }
+.tm-head h2 { margin: 0; font-size: 22px; font-weight: 900; }
+.tm-sub { font-size: 13px; opacity: .9; }
+.tm-mine { font-size: 13px; font-weight: 800; background: rgba(0,0,0,.2); border-radius: 999px; padding: 4px 12px; }
+.tm-fav { border: 0; border-radius: 999px; padding: 7px 16px; font: 800 13.5px var(--body); background: rgba(255,255,255,.92); color: #111; cursor: pointer; }
+.tm-sec { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+.tm-sec h3, .tm-h, .sr-sec h3 { margin: 2px 0 4px; font-size: 15px; font-weight: 800; }
+.tm-h { margin: 14px 2px 6px; }
+.tm-match { display: flex; align-items: center; gap: 10px; border: 0; background: var(--pitch-2); color: var(--chalk); border-radius: 12px; padding: 8px 10px; font-family: var(--body); cursor: pointer; text-align: start; }
+.tm-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tm-mid b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-mid span { font-size: 12px; color: var(--muted); }
+.tm-score { font: 400 20px/1 var(--display); flex: none; direction: rtl; unicode-bidi: isolate; }
+.tm-res { flex: none; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-weight: 900; font-size: 13px; background: var(--card); }
+.tm-res.win { background: #2fbf5b; color: #04150a; } .tm-res.loss { background: #e5484d; color: #fff; } .tm-res.draw { background: #9aa4a8; color: #111; }
+.tm-form { display: flex; gap: 6px; justify-content: center; margin-bottom: 4px; }
+.tm-fans { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.tm-fan { flex: none; width: 76px; border: 0; background: var(--pitch-2); color: var(--chalk); border-radius: 12px; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; font-family: var(--body); }
+.tm-fan b { font-size: 12px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-fan .avatar { width: 40px; height: 40px; }
+.tm-rank { font-size: 13px; font-weight: 800; }
+.sr-box { position: sticky; top: 0; z-index: 4; background: var(--pitch); padding: 10px 0 8px; }
+.sr-in { width: 100%; box-sizing: border-box; font: 15px var(--body); color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 11px 16px; }
+.sr-sec { margin-bottom: 12px; }
+.sr-lg { font-size: 12.5px; color: var(--muted); font-weight: 700; margin: 8px 2px 6px; }
+.sr-teams { display: flex; flex-wrap: wrap; gap: 6px; }
+.sr-team { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card); color: var(--chalk); border-radius: 999px; padding: 4px 12px 4px 4px; font: 700 13px var(--body); cursor: pointer; }
+.sr-team i { font-style: normal; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--tc); color: var(--ti); font-size: 12px; font-weight: 900; }
+.sr-team.mine { border-color: var(--tc); box-shadow: 0 0 0 1px var(--tc); }
+.sr-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.sr-tag { border: 0; background: var(--card); color: #f2b134; border-radius: 999px; padding: 6px 12px; font: 800 13px var(--body); cursor: pointer; }
+.sr-tag.big { display: block; width: 100%; margin-bottom: 10px; padding: 10px; }
 </style>
 </head>
 <body data-league="epl">
@@ -974,8 +1011,8 @@ body.dm-on .cm-fab, body:has(#dmPane:not([hidden])) .cm-fab { display: none; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=35"></script>
-<script src="tactics.js?v=35"></script>
-<script src="live.js?v=35"></script><script src="arena.js?v=35"></script><script src="community.js?v=35"></script><script src="league.js?v=35"></script><script src="tour.js?v=35"></script><script src="dm.js?v=35"></script>
+<script src="app.js?v=36"></script>
+<script src="tactics.js?v=36"></script>
+<script src="live.js?v=36"></script><script src="arena.js?v=36"></script><script src="community.js?v=36"></script><script src="explore.js?v=36"></script><script src="league.js?v=36"></script><script src="tour.js?v=36"></script><script src="dm.js?v=36"></script>
 </body>
 </html>

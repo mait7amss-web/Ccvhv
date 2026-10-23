@@ -1,7 +1,7 @@
 /* ---------- 🌍 المجتمع العام: منشورات للجميع مثل تويتر، ومعها "رأي جريء" ----------
    Lives above the leagues as its own chip. Data and rules are in supabase/community.sql. */
 
-const CM_COLS = "id,user_id,body,image_path,gif_url,audio_path,audio_secs,poll,take_match_id,reply_to,root_id,quote_of,mentions,tags,like_count,reply_count,repost_count,view_count,hidden,created_at,match_id";
+const CM_COLS = "id,user_id,body,image_path,gif_url,audio_path,audio_secs,poll,take_match_id,reply_to,root_id,quote_of,mentions,tags,like_count,reply_count,repost_count,view_count,hidden,created_at,match_id,auto";
 const CM_PAGE = 25;
 const cmPosts = {};                 // id -> post
 const cmFeeds = {};                 // key -> { ids: [], done: bool }
@@ -34,8 +34,9 @@ const cmView = el("div", "wrap pane cm"); cmView.id = "communityView"; cmView.hi
 $("scroller").append(cmView);
 const cmTabs = el("div", "wrap views cm-tabs"); cmTabs.id = "cViews"; cmTabs.hidden = true;
 $("strip").append(cmTabs);
-for (const [id, label] of [["all", "الكل"], ["following", "أتابعهم"], ["trend", "🔥 الترند"], ["notifs", "🔔"]]) {
+for (const [id, label] of [["all", "الكل"], ["following", "أتابعهم"], ["trend", "🔥 الترند"], ["search", "🔍"], ["notifs", "🔔"]]) {
   const b = el("button", null, label); b.type = "button"; b.dataset.tab = id;
+  if (id === "search") b.setAttribute("aria-label", "بحث");
   if (id === "notifs") { b.setAttribute("aria-label", "الإشعارات"); b.append(el("span", "cm-badge")); }
   b.onclick = () => { cmTab = id; cmStack = []; drawCommunity(true); };
   cmTabs.append(b);
@@ -127,6 +128,7 @@ async function cmLoadFeed(key, more) {
   else if (key === "following") q = q.is("reply_to", null).in("user_id", [...cmFollowing, me.id]);
   else if (key === "takes") q = q.not("take_match_id", "is", null);
   else if (key.startsWith("tag:")) q = q.contains("tags", [key.slice(4)]);
+  else if (key.startsWith("team:")) q = q.is("reply_to", null).ilike("body", `%${teamMatchName(key.slice(5)) || TEAM_BY_ID[key.slice(5)]?.name}%`);
   else if (key.startsWith("user:")) q = q.eq("user_id", key.slice(5)).is("reply_to", null);
   if (more && feed.ids.length) q = q.lt("created_at", cmPosts[feed.ids[feed.ids.length - 1]].created_at);
   const { data, error } = await q;
@@ -192,6 +194,8 @@ async function drawCommunity(jump) {
   let draw;
   if (page?.kind === "thread") { const rootId = await cmLoadThread(page.id); draw = () => cmDrawThread(rootId, page.id); }
   else if (page?.kind === "user") { await Promise.all([cmLoadFeed("user:" + page.id), loadPeople([page.id])]); const { data } = await sb.rpc("profile_counts", { u: page.id }); draw = () => cmDrawProfile(page.id, data || {}); }
+  else if (page?.kind === "team") { await cmLoadTeam(page.id); draw = () => cmDrawTeam(page.id); }
+  else if (cmTab === "search" && !page) draw = () => cmDrawSearch();
   else if (page?.kind === "saved") { await cmLoadFeed("saved"); draw = () => cmDrawFeed("saved", "🔖 محفوظاتي"); }
   else if (page?.kind === "tag") { await cmLoadFeed("tag:" + page.id); draw = () => cmDrawFeed("tag:" + page.id, "#" + page.id); }
   else if (cmTab === "trend") { const [{ data: tags }] = await Promise.all([sb.rpc("trending_tags"), cmLoadFeed("takes")]); draw = () => cmDrawTrend(tags || []); }
@@ -224,6 +228,7 @@ function cmDrawFeed(key, title) {
   if (!list.length) {
     cmView.append(key === "following"
       ? cmEmpty("👥", "ما تتابع أحد للحين", "تابع الناس اللي يعجبك كلامهم من صفحاتهم، ومنشوراتهم بتطلع هنا.")
+      : key.startsWith("team:") ? cmEmpty("💬", "محد تكلم عنه للحين", "اكتب أول منشور عن الفريق واذكر اسمه.")
       : key === "saved" ? cmEmpty("🔖", "ما حفظت شي للحين", "اضغط علامة الحفظ تحت أي منشور، ويطلع لك هنا.")
       : cmEmpty("🌍", "كن أول واحد ينشر", "اكتب رأيك، نزّل صورة، أو تحدّى الكل برأي جريء 🔥"));
     return;
@@ -363,6 +368,18 @@ function postCard(p, opts = {}) {
     rb.append(el("b", null, `🏟️ ${m.home} × ${m.away}`), el("span", null, open ? "🔴 ادخل الغرفة" : "🔒 انقفلت"));
     rb.onclick = (e) => { e.stopPropagation(); open ? enterRoom(m) : (m.stats || m.lineups ? statsSheet(m) : toast("🔒 الغرفة انقفلت")); };
     card.append(rb);
+  }
+  if ((p.auto === "lineup" || p.auto === "ft") && p.match_id) {
+    const lb = el("button", "post-auto", p.auto === "ft" ? "⭐ قيّم اللاعبين وشوف الإحصائيات" : "📋 شوف التشكيلة على الملعب"); lb.type = "button";
+    lb.onclick = async (e) => {
+      e.stopPropagation(); lb.disabled = true;
+      const { data: m } = await sb.from("matches").select("*").eq("id", p.match_id).maybeSingle();
+      lb.disabled = false;
+      if (!m) return;
+      matchCache[m.id] = { ...(matchCache[m.id] || {}), ...m };
+      if (m.lineups) lineupSheet(m); else statsSheet(m);
+    };
+    card.append(lb);
   }
   if (p.poll) card.append(postPoll(p));
   if (p.image_path) {
