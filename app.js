@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 23; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 24; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -89,6 +89,12 @@ const hiddenLocal = new Set((() => { try { return JSON.parse(localStorage.getIte
 function hideLocally(id) { hiddenLocal.add(id); try { localStorage.setItem("hala.hidden", JSON.stringify([...hiddenLocal].slice(-500))); } catch {} }
 const votes = {};              // message_id -> { user_id: option }
 const matchData = {};          // channel -> { matches, preds: { match_id: [prediction] } }
+const motmMine = {};           // match_id -> my star-of-the-match pick
+// Highest official rating in a finished match
+function topRated(m) {
+  if (!m.players || m.home_score == null) return null;
+  return [...(m.players.home || []), ...(m.players.away || [])].sort((a, b) => b.rating - a.rating)[0] || null;
+}
 const seen = new Set();
 let realtime = null;
 let pickerFor = null;          // message id whose reaction picker is open
@@ -984,17 +990,22 @@ async function loadMatches(ch) {
     : { data: [] };
   const byMatch = {};
   for (const p of preds || []) (byMatch[p.match_id] ||= []).push(p);
+  if (ids.length) {
+    const { data: mp } = await sb.from("motm_picks").select("match_id,player").eq("user_id", me.id).in("match_id", ids);
+    for (const x of mp || []) motmMine[x.match_id] = x.player;
+  }
   matchData[ch] = { matches, preds: byMatch };
   await loadPeople([...matches.map(m => m.created_by), ...(preds || []).map(p => p.user_id)].filter(Boolean));
 }
 
 const sign = (n) => Math.sign(n);
+// Predictions are now just who wins (stored as 1-0, 0-0, 0-1): +10 when right.
 function pointsFor(p, m) {
   if (m.home_score == null || m.away_score == null) return null;
-  if (p.home === m.home_score && p.away === m.away_score) return 3;
-  return sign(p.home - p.away) === sign(m.home_score - m.away_score) ? 1 : 0;
+  return sign(p.home - p.away) === sign(m.home_score - m.away_score) ? 10 : 0;
 }
-function ptsBadge(n) { return el("span", "pts p" + n, n === 3 ? "+٣ بالضبط" : n === 1 ? "+١ النتيجة" : "٠"); }
+function ptsBadge(n) { return el("span", "pts p" + (n ? 3 : 0), n ? "+١٠ صح" : "٠"); }
+const pickLabel = (p, m) => { const d = sign(p.home - p.away); return d > 0 ? "فوز " + m.home : d < 0 ? "فوز " + m.away : "تعادل"; };
 
 function goalInput(val, label) {
   const i = el("input", "goal"); i.type = "number"; i.inputMode = "numeric"; i.min = 0; i.max = 30;
@@ -1007,7 +1018,7 @@ function renderPredictions() {
   const box = $("predView"); box.textContent = "";
   const data = matchData[channel] || { matches: [], preds: {} };
   const head = el("div", "pane-head");
-  const ht = el("div"); ht.append(el("h2", null, "توقعات الجولة"), el("p", null, "توقّع النتيجة قبل صافرة البداية. التوقعات تنكشف أول ما تبدأ المباراة."));
+  const ht = el("div"); ht.append(el("h2", null, "توقعات الجولة"), el("p", null, "توقّع مين يفوز (+١٠) ونجم المباراة (+٢٠) قبل صافرة البداية. النقاط تدخل في دوري المدرج 🏆"));
   head.append(ht); box.append(head);
   if (data.error) { box.append(el("div", "rules", "ما قدرنا نجيب المباريات. تأكد إن تحديث قاعدة البيانات انشغل، وحدّث الصفحة.")); return; }
   const now = Date.now();
@@ -1036,10 +1047,8 @@ function matchCard(m, preds, started) {
   const sc = el("div", "score");
   const mid = el("div", "mid");
   const myPred = preds.find(p => p.user_id === me.id);
-  let hIn, aIn;
   if (!started) {
-    hIn = goalInput(myPred?.home, "أهداف " + m.home); aIn = goalInput(myPred?.away, "أهداف " + m.away);
-    mid.append(hIn, el("span", "vs", "-"), aIn);
+    mid.append(el("span", "vs", "ضد"));
   } else if (done) {
     mid.append(el("span", null, m.home_score), el("span", "vs", "-"), el("span", null, m.away_score));
   } else if (m.live_home != null && m.live_away != null) {
@@ -1054,21 +1063,31 @@ function matchCard(m, preds, started) {
 
   const rowEl = el("div", "mrow");
   if (!started) {
-    const note = el("span", "note", myPred ? `توقعك: ${myPred.home} - ${myPred.away}` : "ما توقعت للحين");
-    const save = el("button", "small pri", myPred ? "عدّل توقعي" : "احفظ توقعي"); save.type = "button";
-    save.onclick = async () => {
-      const h = goalVal(hIn), a = goalVal(aIn);
-      if (h == null || a == null) { note.textContent = "اكتب أهداف الفريقين (من ٠ إلى ٣٠)."; return; }
-      save.disabled = true;
-      const { error } = await sb.from("predictions").upsert({ match_id: m.id, user_id: me.id, home: h, away: a, updated_at: new Date().toISOString() }, { onConflict: "match_id,user_id" });
-      save.disabled = false;
-      if (error) { note.textContent = new Date(m.kickoff) <= Date.now() ? "بدأت المباراة، ما يمديك تتوقع." : "ما انحفظ. جرّب مرة ثانية."; return; }
-      const list = matchData[channel].preds[m.id] ||= [];
-      const ex = list.find(p => p.user_id === me.id);
-      if (ex) { ex.home = h; ex.away = a; } else list.push({ match_id: m.id, user_id: me.id, home: h, away: a });
-      renderPredictions();
-    };
-    rowEl.append(note, save);
+    // Who wins? three buttons
+    const picks = el("div", "picks");
+    const mySign = myPred ? sign(myPred.home - myPred.away) : null;
+    for (const [d, label] of [[1, m.home], [0, "تعادل"], [-1, m.away]]) {
+      const b = el("button", "pick" + (mySign === d ? " on" : ""), label); b.type = "button";
+      b.onclick = async () => {
+        const [h, a] = d > 0 ? [1, 0] : d < 0 ? [0, 1] : [0, 0];
+        picks.querySelectorAll("button").forEach(x => x.disabled = true);
+        const { error } = await sb.from("predictions").upsert({ match_id: m.id, user_id: me.id, home: h, away: a, updated_at: new Date().toISOString() }, { onConflict: "match_id,user_id" });
+        if (error) { toast(new Date(m.kickoff) <= Date.now() ? "بدأت المباراة، ما يمديك تتوقع." : "ما انحفظ. جرّب مرة ثانية."); renderPredictions(); return; }
+        const list = matchData[channel].preds[m.id] ||= [];
+        const ex = list.find(p => p.user_id === me.id);
+        if (ex) { ex.home = h; ex.away = a; } else list.push({ match_id: m.id, user_id: me.id, home: h, away: a });
+        renderPredictions();
+      };
+      picks.append(b);
+    }
+    card.append(picks);
+    rowEl.append(el("span", "note", myPred ? `توقعك: ${pickLabel(myPred, m)}` : "مين بيفوز؟ اختر 👆"));
+    // Star of the match: once the lineups are out
+    const mine = motmMine[m.id];
+    const st = el("button", "small" + (mine ? "" : " pri"), m.lineups ? (mine ? `⭐ نجمك: ${mine}` : "⭐ اختر نجم المباراة") : "⭐ نجم المباراة: بعد التشكيلة"); st.type = "button";
+    st.disabled = !m.lineups;
+    st.onclick = () => motmSheet(m);
+    rowEl.append(st);
   } else {
     rowEl.append(el("span", "note", preds.length ? `${preds.length} توقّعوا` : "ما أحد توقّع"));
   }
@@ -1079,13 +1098,23 @@ function matchCard(m, preds, started) {
   }
   card.append(rowEl);
 
+  if (started) {
+    const star = topRated(m);
+    const mine = motmMine[m.id];
+    if (star || mine) {
+      const line = el("div", "starline");
+      if (star) line.append(el("span", null, `⭐ نجم المباراة: ${star.name} (${Number(star.rating).toFixed(1)})`));
+      if (mine) line.append(el("span", mine === star?.name ? "ok" : null, mine === star?.name ? "✅ جبته! +٢٠" : `اخترت ${mine}`));
+      card.append(line);
+    }
+  }
   if (started && preds.length) {
     const list = el("div", "preds");
     const sorted = preds.slice().sort((a, b) => (pointsFor(b, m) ?? 0) - (pointsFor(a, m) ?? 0));
     for (const p of sorted) {
       const r = el("div", "pr");
       const w = el("span", "who2", nameOf(p.user_id) + (p.user_id === me.id ? " (أنت)" : ""));
-      const g = el("span", "g", `${p.home} - ${p.away}`);
+      const g = el("span", "g", pickLabel(p, m));
       const pts = pointsFor(p, m); if (pts != null) g.append(ptsBadge(pts));
       r.append(w, g); list.append(r);
     }

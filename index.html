@@ -651,6 +651,75 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 .subp { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--pitch-2); color: var(--chalk); font: 700 12.5px var(--body); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
 .pitch .pl { -webkit-tap-highlight-color: transparent; }
 .sheet-p.note2 { font-size: 12px; }
+/* ---------- 🏆 دوري المدرج ---------- */
+.picks { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; }
+.pick { border: 1px solid var(--line); background: var(--pitch-2); color: var(--chalk); font: 800 13.5px var(--body); border-radius: 12px; padding: 10px 6px; cursor: pointer; overflow-wrap: anywhere; }
+.pick.on { background: var(--league); color: var(--league-ink); border-color: var(--league); }
+.pick:disabled { opacity: .6; }
+.starline { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12.5px; color: var(--muted); }
+.starline .ok { color: var(--turf); font-weight: 800; }
+.lg-head { display: flex; align-items: center; gap: 12px; background: linear-gradient(135deg, color-mix(in srgb, var(--tc) 35%, var(--card)), var(--card)); border: 1px solid var(--tc); border-radius: 18px; padding: 14px; }
+.lg-ico { font-size: 40px; line-height: 1; }
+.lg-ht { display: flex; flex-direction: column; gap: 2px; }
+.lg-ht h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 24px; }
+.lg-ht b { color: var(--tc); font-size: 14px; }
+.lg-cd { color: var(--muted); font-size: 12.5px; }
+.lg-moved { border-radius: 12px; padding: 10px; text-align: center; font-weight: 800; }
+.lg-moved.up { background: color-mix(in srgb, var(--turf) 25%, var(--card)); color: var(--turf); }
+.lg-moved.down { background: color-mix(in srgb, var(--danger) 20%, var(--card)); color: var(--danger); }
+.lg-rival { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; font: inherit; color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px; cursor: pointer; }
+.rv-side { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
+.rv-side .avatar { width: 40px; height: 40px; font-size: 17px; }
+.rv-side b { font-size: 20px; }
+.rv-side small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.rv-mid { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.rv-t { font-weight: 800; font-size: 13px; }
+.rv-s { font-size: 12px; font-weight: 800; border-radius: 999px; padding: 2px 10px; background: var(--pitch-2); }
+.rv-s.win { color: var(--turf); } .rv-s.lose { color: var(--danger); }
+.lg-table { display: flex; flex-direction: column; gap: 4px; }
+.lg-row { display: flex; align-items: center; gap: 10px; font: inherit; color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-inline-start: 4px solid var(--line); border-radius: 12px; padding: 8px 10px; cursor: pointer; text-align: start; }
+.lg-row.up { border-inline-start-color: var(--turf); }
+.lg-row.down { border-inline-start-color: var(--danger); }
+.lg-row.me { background: color-mix(in srgb, var(--league) 18%, var(--card)); }
+.lg-rk { width: 20px; color: var(--muted); font-weight: 800; text-align: center; }
+.lg-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.lg-nm .mv { font-style: normal; font-size: 11px; margin-inline-start: 4px; }
+.lg-nm .mv.up { color: var(--turf); } .lg-nm .mv.down { color: var(--danger); }
+.lg-pts { font-size: 16px; }
+.lg-det { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--muted); padding: 2px 34px 6px; }
+.fx-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.fx-hd { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.fx-hd b { font-size: 16px; } .fx-hd span { color: var(--muted); font-size: 12.5px; }
+.pitch.fx-mini { max-height: 360px; }
+.fx-panel { display: flex; flex-direction: column; gap: 8px; }
+.fx-panel:empty { display: none; }
+.fx-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.fx-q { font: 14px var(--body); color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.fx-list { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; }
+.fx-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: inherit; color: var(--chalk); background: var(--pitch-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; cursor: pointer; text-align: start; }
+.fx-row:disabled { opacity: .45; }
+.fx-nm { display: flex; flex-direction: column; min-width: 0; }
+.fx-nm small { color: var(--muted); font-size: 11.5px; }
+.fx-row i { color: #fff; font-style: normal; font-weight: 800; font-size: 12px; border-radius: 6px; padding: 1px 6px; flex: none; }
+.lg-war { display: flex; flex-direction: column; gap: 6px; }
+.war-row { display: grid; grid-template-columns: 18px minmax(70px, auto) 1fr auto; align-items: center; gap: 8px; font-size: 13px; }
+.war-row small { grid-column: 2 / -1; color: var(--muted); font-size: 11px; margin-top: -4px; }
+.war-row.mine .war-nm { color: var(--league); font-weight: 800; }
+.war-rk { color: var(--muted); font-weight: 800; }
+.war-bar { height: 8px; background: var(--pitch-2); border-radius: 999px; overflow: hidden; }
+.war-bar i { display: block; height: 100%; border-radius: 999px; }
+.lg-titles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lg-title { display: flex; flex-direction: column; align-items: center; gap: 4px; font: inherit; color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px; cursor: pointer; }
+.lg-title .tt { font-size: 12.5px; font-weight: 800; color: #e3c84a; }
+.lg-title .avatar { width: 38px; height: 38px; }
+.lg-title small { color: var(--muted); font-size: 11.5px; }
+.lg-how { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.lg-how summary { font-weight: 800; cursor: pointer; }
+.lg-how p { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+.motm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.motm-b { display: flex; align-items: center; gap: 8px; font: 700 13px var(--body); color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px; cursor: pointer; text-align: start; }
+.motm-b i { font-style: normal; background: var(--league); color: var(--league-ink); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; font-size: 11px; flex: none; }
+.motm-b.on { border-color: #e3c84a; background: color-mix(in srgb, #e3c84a 20%, var(--card)); }
 </style>
 </head>
 <body data-league="epl">
@@ -709,7 +778,7 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
   <div class="wrap views" role="tablist" aria-label="الأقسام">
     <button type="button" id="vChat" aria-pressed="true">النقاش</button>
     <button type="button" id="vPred" aria-pressed="false">التوقعات</button>
-    <button type="button" id="vTable" aria-pressed="false">الترتيب</button>
+    <button type="button" id="vTable" aria-pressed="false">🏆 الدوري</button>
     <button type="button" id="vArena" aria-pressed="false">نقاش منظم</button>
   </div>
 </div>
@@ -762,8 +831,8 @@ body:has(#authScreen:not([hidden])) .cm-fab, body:has(#sheetBg:not([hidden])) .c
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=23"></script>
-<script src="tactics.js?v=23"></script>
-<script src="live.js?v=23"></script><script src="arena.js?v=23"></script><script src="community.js?v=23"></script>
+<script src="app.js?v=24"></script>
+<script src="tactics.js?v=24"></script>
+<script src="live.js?v=24"></script><script src="arena.js?v=24"></script><script src="community.js?v=24"></script><script src="league.js?v=24"></script>
 </body>
 </html>

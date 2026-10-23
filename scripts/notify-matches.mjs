@@ -52,7 +52,8 @@ const logged = new Set(log.map((l) => `${l.match_id}|${l.user_id}|${l.kind}`));
 const predOf = (m, u) => preds.find((p) => p.match_id === m && p.user_id === u);
 
 const sign = Math.sign;
-const points = (p, m) => (p.home === m.home_score && p.away === m.away_score ? 3 : sign(p.home - p.away) === sign(m.home_score - m.away_score) ? 1 : 0);
+const points = (p, m) => (sign(p.home - p.away) === sign(m.home_score - m.away_score) ? 10 : 0);
+const pickText = (p, m) => { const d = sign(p.home - p.away); return d > 0 ? `فوز ${m.home}` : d < 0 ? `فوز ${m.away}` : "تعادل"; };
 
 // Build one notification per (match, user, kind); every device of that user gets it.
 const jobs = [];
@@ -75,7 +76,7 @@ for (const u of users) {
     const to = mine.filter((s) => s.results);
     if (to.length) jobs.push({ m, u, kind: "result", to, payload: {
       title: `⚽ انتهت: ${m.home} ${m.home_score} - ${m.away_score} ${m.away}`,
-      body: `توقعك ${p.home} - ${p.away}، ` + (pts === 3 ? "جبتها بالضبط! +٣ نقاط 🎯" : pts === 1 ? "جبت النتيجة، +١ نقطة 👍" : "ما ضبطت هالمرة، ٠ نقاط"),
+      body: `توقعك: ${pickText(p, m)}. ` + (pts ? "صح! +١٠ في دوري المدرج 🎯" : "ما ضبطت هالمرة. عوّضها بتشكيلة الجولة ⚽"),
       url: `./?league=${m.channel}&view=pred`, tag: `result-${m.id}`,
     } });
   }
