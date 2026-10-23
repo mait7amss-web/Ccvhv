@@ -1,7 +1,7 @@
 /* ---------- 🌍 المجتمع العام: منشورات للجميع مثل تويتر، ومعها "رأي جريء" ----------
    Lives above the leagues as its own chip. Data and rules are in supabase/community.sql. */
 
-const CM_COLS = "id,user_id,body,image_path,gif_url,audio_path,audio_secs,poll,take_match_id,reply_to,root_id,quote_of,mentions,tags,like_count,reply_count,repost_count,view_count,hidden,created_at,match_id,auto";
+const CM_COLS = "id,user_id,body,image_path,gif_url,audio_path,audio_secs,poll,take_match_id,reply_to,root_id,quote_of,mentions,tags,like_count,reply_count,repost_count,view_count,hidden,created_at,match_id,auto,video_path,video_secs";
 const CM_PAGE = 25;
 const cmPosts = {};                 // id -> post
 const cmFeeds = {};                 // key -> { ids: [], done: bool }
@@ -221,7 +221,7 @@ const cmVisible = (p) => p && !blocked.has(p.user_id) && !hiddenLocal.has("p" + 
 function cmDrawFeed(key, title) {
   if (title) cmView.append(el("h2", "cm-title", title));
   if (key === "all" || key === "following") cmView.append(cmPrompt());
-  if (key === "all") cmView.append(cmArenaStrip());
+  if (key === "all") cmView.append(cmArenaStrip(), studioStrip());
   const feed = cmFeeds[key] || { ids: [] };
   const list = feed.ids.map((id) => cmPosts[id]).filter(cmVisible);
   if (!list.length) {
@@ -387,6 +387,7 @@ function postCard(p, opts = {}) {
     im.onclick = (e) => { e.stopPropagation(); if (im.src) { $("viewerImg").src = im.src; $("viewer").hidden = false; } };
     card.append(im);
   }
+  if (p.video_path) card.append(postVideo(p));
   if (p.gif_url) { const g = el("img", "post-img"); g.src = p.gif_url; g.alt = "GIF"; g.loading = "lazy"; card.append(g); }
   if (p.audio_path) card.append(voiceEl({ id: "p" + p.id, audio_path: p.audio_path, audio_secs: p.audio_secs }));
   if (p.take_match_id) card.append(takeVotesEl(p));
@@ -394,13 +395,13 @@ function postCard(p, opts = {}) {
     const q = cmPosts[p.quote_of];
     const qb = el("div", "post-quote");
     if (q && cmVisible(q)) {
-      qb.append(el("b", null, nameOf(q.user_id)), el("div", null, q.body || (q.image_path ? "📷 صورة" : q.audio_path ? "🎤 صوت" : q.gif_url ? "GIF" : q.poll ? "📊 تصويت" : "")));
+      qb.append(el("b", null, nameOf(q.user_id)), el("div", null, q.body || (q.video_path ? "🎬 فيديو تحليل" : q.image_path ? "📷 صورة" : q.audio_path ? "🎤 صوت" : q.gif_url ? "GIF" : q.poll ? "📊 تصويت" : "")));
       qb.onclick = (e) => { e.stopPropagation(); cmOpen("thread", q.id); };
     } else qb.textContent = "المنشور الأصلي انحذف";
     card.append(qb);
   }
   card.append(postActions(p));
-  if (!opts.big) card.onclick = (e) => { if (e.target.closest("button, a, .voice, .poll, img")) return; cmOpen("thread", p.id); };
+  if (!opts.big) card.onclick = (e) => { if (e.target.closest("button, a, .voice, .poll, img, video")) return; cmOpen("thread", p.id); };
   return card;
 }
 
@@ -622,6 +623,7 @@ function postMenu(p) {
   openSheet("خيارات المنشور", (s) => {
     const add = (label, fn, cls) => { const b = el("button", "ghost cm-wide " + (cls || ""), label); b.type = "button"; b.onclick = fn; s.append(b); };
     add("📤 شارك المنشور", () => { closeSheet(); cmShare(p); });
+    if (p.video_path) add("⬇️ احفظ الفيديو (لتيك توك وانستقرام)", () => { closeSheet(); svDownloadPosted(p); });
     if (p.user_id === me.id || isAdmin) add("🗑️ احذف المنشور", () => cmDelete(p), "danger");
     if (p.user_id !== me.id) {
       add("🚩 بلّغ عن المنشور", () => cmReport(p));
@@ -638,6 +640,7 @@ function cmDelete(p) {
     sheetActions(s, "احذف", async () => {
       const { error } = await sb.from("posts").delete().eq("id", p.id);
       if (error) return "ما قدرنا نحذفه.";
+      if (p.video_path && p.user_id === me.id) sb.storage.from("videos").remove([p.video_path, posterOf(p.video_path)]).catch(() => {});
       delete cmPosts[p.id];
       for (const k in cmFeeds) cmFeeds[k].ids = cmFeeds[k].ids.filter((id) => id !== p.id);
       if (cmPage()?.kind === "thread" && (cmPage().id === p.id)) cmStack.pop();
@@ -804,6 +807,7 @@ function composeSheet({ reply = null, quote = null, take = false, match = null }
       setTimeout(() => { if (rec && Date.now() - t0 >= 119000) { stopRec(false); mic.textContent = "🎤"; } }, 120000);
     });
     tool("📊", () => { att = { kind: "poll", inputs: [cmOpt(0), cmOpt(1)] }; showAtt(); });
+    if (!quote && !match) tool("🎬", () => { stopRec(true); closeSheet(); studioOpen({ reply }); }).title = reply ? "رد بتحليل فيديو" : "استوديو التحليل";
     if (!reply && !quote && !match) {
       const tb = tool("🔥 رأي جريء", () => { takeOn = !takeOn; takeBox.hidden = !takeOn; tb.classList.toggle("on", takeOn); });
       tb.classList.toggle("on", takeOn);

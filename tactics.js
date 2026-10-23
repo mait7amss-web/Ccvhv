@@ -718,8 +718,10 @@ async function lineupSheet(match) {
       closeSheet();
       tacticEditor({ formation: f, players: b2.home, opp: b2.away, arrows: [], zones: [], title: `${match.home} × ${match.away}` });
     };
+    const vb = el("button", "primary cm-wide sv-open", "🎬 سجّل تحليل فيديو بصوتك"); vb.type = "button";
+    vb.onclick = () => { closeSheet(); if (typeof studioOpen === "function") studioOpen({ match }); };
     const c = el("button", "cancel", "سكّر"); c.type = "button"; c.onclick = closeSheet;
-    acts.append(tb, c); s.append(acts);
+    acts.append(tb, c); s.append(vb, acts);
   });
 }
 
