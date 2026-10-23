@@ -213,6 +213,7 @@ const cmVisible = (p) => p && !blocked.has(p.user_id) && !hiddenLocal.has("p" + 
 function cmDrawFeed(key, title) {
   if (title) cmView.append(el("h2", "cm-title", title));
   if (key === "all" || key === "following") cmView.append(cmPrompt());
+  if (key === "all") cmView.append(cmArenaStrip());
   const feed = cmFeeds[key] || { ids: [] };
   const list = feed.ids.map((id) => cmPosts[id]).filter(cmVisible);
   if (!list.length) {
@@ -1006,4 +1007,39 @@ async function profileSheet(uid) {
     const close = el("button", "cancel", "سكّر"); close.type = "button"; close.onclick = closeSheet;
     s.append(page, bl, close);
   });
+}
+
+/* ---------- 🎙️ open debates from every league, at the top of the community feed ---------- */
+function cmArenaStrip() {
+  const wrap = el("div", "cm-arenas"); wrap.hidden = true;
+  (async () => {
+    const now = Date.now();
+    const { data, error } = await sb.from("arenas").select("id,channel,topic,side_a,side_b,starts_at,created_at,private")
+      .or(`starts_at.is.null,starts_at.gt.${new Date(now - 30 * 60000).toISOString()}`)
+      .gt("created_at", new Date(now - 24 * 3600000).toISOString())
+      .order("created_at", { ascending: false }).limit(15);
+    if (error || !data?.length) return;
+    const list = data.filter((a) => !a.private && (!a.starts_at || new Date(a.starts_at).getTime() + 30 * 60000 > now));
+    if (!list.length) return;
+    const { data: seats } = await sb.from("arena_seats").select("arena_id").in("arena_id", list.map((a) => a.id));
+    const count = {}; for (const x of seats || []) count[x.arena_id] = (count[x.arena_id] || 0) + 1;
+    // live first, then the fullest waiting ones (closest to starting)
+    const state = (a) => (!a.starts_at ? "wait" : new Date(a.starts_at) > now ? "soon" : "live");
+    list.sort((x, y) => ({ live: 0, soon: 1, wait: 2 }[state(x)] - { live: 0, soon: 1, wait: 2 }[state(y)]) || (count[y.id] || 0) - (count[x.id] || 0));
+    const head = el("div", "cm-ar-head"); head.append(el("b", null, "🎙️ نقاشات منظمة مفتوحة"), el("span", null, "٣ ضد ٣"));
+    const row = el("div", "cm-ar-row");
+    for (const a of list) {
+      const st = state(a), n = count[a.id] || 0;
+      const c = el("button", "cm-ar " + st); c.type = "button";
+      const lg = CHANNELS.find((x) => x.id === a.channel);
+      c.append(el("small", null, `${lg?.flag || ""} ${lg?.short || ""}`), el("b", null, a.topic), el("span", "vs", `${a.side_a} × ${a.side_b}`));
+      const seatsEl = el("div", "seats");
+      for (let i = 0; i < 6; i++) seatsEl.append(el("i", i < n ? "on" : null));
+      c.append(seatsEl, el("span", "cta", st === "live" ? "🔴 شغّال · تابع" : st === "soon" ? "⏳ يبدأ بعد شوي" : `ناقصهم ${arNum(6 - n)} · انضم`));
+      c.onclick = () => openArenaAnywhere(a.id, a.channel);
+      row.append(c);
+    }
+    wrap.append(head, row); wrap.hidden = false;
+  })();
+  return wrap;
 }

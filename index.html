@@ -764,6 +764,22 @@ body:has(#room:not([hidden])) .cm-fab { display: none; }
 .tour-acts { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
 .tour-acts .primary { flex: 1; }
 .tour-skip { border: 0; background: none; color: var(--muted); font: 700 13.5px var(--body); cursor: pointer; padding: 8px; }
+/* ---------- 🎙️ نقاشات مفتوحة في المجتمع ---------- */
+.cm-arenas { display: flex; flex-direction: column; gap: 8px; }
+.cm-ar-head { display: flex; justify-content: space-between; align-items: baseline; }
+.cm-ar-head span { color: var(--muted); font-size: 12px; }
+.cm-ar-row { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; margin-inline: -16px; padding-inline: 16px; scrollbar-width: none; }
+.cm-ar-row::-webkit-scrollbar { display: none; }
+.cm-ar { flex: 0 0 72%; max-width: 280px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 5px; font: inherit; color: var(--chalk); text-align: start; background: linear-gradient(160deg, color-mix(in srgb, #8f3fd6 22%, var(--card)), var(--card)); border: 1px solid color-mix(in srgb, #8f3fd6 50%, var(--line)); border-radius: 16px; padding: 12px; cursor: pointer; }
+.cm-ar.live { border-color: var(--danger); background: linear-gradient(160deg, color-mix(in srgb, var(--danger) 18%, var(--card)), var(--card)); }
+.cm-ar small { color: var(--muted); font-size: 11.5px; }
+.cm-ar b { font-size: 14.5px; line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cm-ar .vs { font-size: 12px; color: var(--muted); }
+.cm-ar .seats { display: flex; gap: 4px; }
+.cm-ar .seats i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px dashed var(--line); }
+.cm-ar .seats i.on { background: #8f3fd6; border: 0; }
+.cm-ar .cta { font-weight: 800; font-size: 12.5px; color: #c89bff; }
+.cm-ar.live .cta { color: var(--danger); }
 </style>
 </head>
 <body data-league="epl">
@@ -876,8 +892,8 @@ body:has(#room:not([hidden])) .cm-fab { display: none; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=29"></script>
-<script src="tactics.js?v=29"></script>
-<script src="live.js?v=29"></script><script src="arena.js?v=29"></script><script src="community.js?v=29"></script><script src="league.js?v=29"></script><script src="tour.js?v=29"></script>
+<script src="app.js?v=30"></script>
+<script src="tactics.js?v=30"></script>
+<script src="live.js?v=30"></script><script src="arena.js?v=30"></script><script src="community.js?v=30"></script><script src="league.js?v=30"></script><script src="tour.js?v=30"></script>
 </body>
 </html>
