@@ -647,6 +647,7 @@ async function lineupSheet(match) {
       const mine = rows.find((r) => r.user_id === me.id && r.side === side && r.player === name)?.rating;
       const hd = el("div", "rp-hd");
       hd.append(el("b", null, name), el("span", null, side === "home" ? match.home : match.away));
+      const pl = (match.players?.[side] || []).find((x) => x.name === name);
       const info = el("div", "rp-info");
       if (off) { const b = el("span", "rp-badge", Number(off).toFixed(1)); b.style.background = ratingColor(off); info.append(el("span", null, "رسمي"), b); }
       info.append(el("span", null, c ? `المدرج ${c.avg.toFixed(1)} (${c.n})` : "ما أحد قيّمه من المدرج"));
@@ -665,7 +666,10 @@ async function lineupSheet(match) {
         };
         btns.append(b);
       }
-      panel.append(hd, info, el("p", "sheet-p note2", "تقييمك من ١ إلى ١٠:"), btns);
+      panel.append(hd, info);
+      if (pl) panel.append(playerStatsEl(pl));
+      else if (started) panel.append(el("p", "sheet-p note2", "ما فيه إحصائيات تفصيلية لهاللاعب (ما شارك أو للحين ما وصلت)."));
+      panel.append(el("p", "sheet-p note2", "تقييمك من ١ إلى ١٠:"), btns);
       panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
     };
     draw();
@@ -719,6 +723,54 @@ async function lineupSheet(match) {
   });
 }
 
+/* ---------- 🧍 A player's full match stats ---------- */
+function playerStatsEl(p) {
+  const s = p.s || {}, box = el("div", "pst");
+  const ar = (n) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]);
+  const POS = { G: "حارس", D: "مدافع", M: "وسط", F: "مهاجم" };
+  const top = el("div", "pst-top");
+  const chip = (t) => top.append(el("span", null, t));
+  if (p.min) chip(`⏱️ ${ar(p.min)} دقيقة`);
+  if (s.pos) chip(POS[s.pos] || s.pos);
+  if (s.cap) chip("© الكابتن");
+  if (s.g) chip(`⚽ ${ar(s.g)}`);
+  if (s.a) chip(`🅰️ ${ar(s.a)}`);
+  if (s.yc) chip("🟨"); if (s.rc) chip("🟥");
+  box.append(top);
+  const groups = [];
+  const row = (label, val, hi) => val == null ? null : [label, val, hi];
+  const pct = (a, b) => (b ? ` (${ar(Math.round(a / b * 100))}٪)` : "");
+  const acc = s.acc != null && s.pas ? Number(String(s.acc).replace("%", "")) : null;
+  groups.push(["⚽ الهجوم", [
+    row("أهداف", s.g ?? 0, s.g), row("صناعة", s.a ?? 0, s.a),
+    row("تسديدات", s.sh != null ? `${ar(s.sot ?? 0)} على المرمى من ${ar(s.sh)}` : null),
+    row("مراوغات ناجحة", s.dr != null ? `${ar(s.drs ?? 0)} من ${ar(s.dr)}${pct(s.drs ?? 0, s.dr)}` : null),
+    row("تسلل", s.off), row("ضربات جزاء", s.ps || s.pm ? `${ar(s.ps ?? 0)} سجّل · ${ar(s.pm ?? 0)} ضيّع` : null),
+    row("كسب ضربة جزاء", s.pw),
+  ]]);
+  groups.push(["🎯 التمرير", [
+    row("تمريرات", s.pas != null ? (acc != null && acc <= s.pas ? `${ar(acc)} صحيحة من ${ar(s.pas)}${pct(acc, s.pas)}` : `${ar(s.pas)}` + (acc != null ? ` · دقة ${ar(acc)}٪` : "")) : null),
+    row("تمريرات مفتاحية", s.kp, s.kp >= 3),
+  ]]);
+  groups.push(["🛡️ الدفاع", [
+    row("افتكاك", s.tk), row("قطع", s.int), row("صد تسديدات", s.blk),
+    row("التحامات", s.du != null ? `${ar(s.duw ?? 0)} فاز من ${ar(s.du)}${pct(s.duw ?? 0, s.du)}` : null),
+  ]]);
+  if (s.pos === "G" || s.sv != null || s.gc != null) groups.push(["🧤 الحراسة", [row("تصديات", s.sv, s.sv >= 4), row("أهداف دخلت", s.gc), row("صد ضربة جزاء", s.psv, s.psv)]]);
+  groups.push(["⚠️ الأخطاء", [row("أخطاء عليه", s.fd), row("ارتكب أخطاء", s.fc), row("إنذار", s.yc), row("طرد", s.rc)]]);
+  for (const [title, rows] of groups) {
+    const list = rows.filter(Boolean); if (!list.length) continue;
+    const g = el("div", "pst-g"); g.append(el("b", null, title));
+    for (const [label, val, hi] of list) {
+      const r = el("div", "pst-r" + (hi ? " hi" : ""));
+      r.append(el("span", null, label), el("em", null, typeof val === "number" ? ar(val) : val));
+      g.append(r);
+    }
+    box.append(g);
+  }
+  return box;
+}
+
 /* ---------- 📊 Match statistics (live, from API-Football) ---------- */
 const STAT_ROWS = [
   ["Ball Possession", "الاستحواذ"], ["expected_goals", "الأهداف المتوقعة xG"], ["Total Shots", "التسديدات"],
@@ -769,7 +821,7 @@ function statsSheet(match) {
         const g = el("div", "stgoals");
         for (const side of ["home", "away"]) {
           const col = el("div", side);
-          for (const p of (best[side] || []).slice(0, 3)) col.append(el("div", null, `${p.name} · ${Number(p.rating).toFixed(1)}`));
+          for (const p of (best[side] || []).filter((p) => p.rating).slice(0, 3)) col.append(el("div", null, `${p.name} · ${Number(p.rating).toFixed(1)}`));
           g.append(col);
         }
         body.append(g);

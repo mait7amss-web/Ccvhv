@@ -22,6 +22,19 @@ const STATUS: Record<string, string> = {
 
 // deno-lint-ignore no-explicit-any
 type Fx = any;
+// Every number API-Football gives per player in a match, under short keys
+const pstats = (st: Fx) => {
+  const v: Record<string, unknown> = {
+    pos: st.games?.position, cap: st.games?.captain || undefined, g: st.goals?.total, a: st.goals?.assists, gc: st.goals?.conceded, sv: st.goals?.saves,
+    sh: st.shots?.total, sot: st.shots?.on, pas: st.passes?.total, kp: st.passes?.key, acc: st.passes?.accuracy,
+    tk: st.tackles?.total, blk: st.tackles?.blocks, int: st.tackles?.interceptions, du: st.duels?.total, duw: st.duels?.won,
+    dr: st.dribbles?.attempts, drs: st.dribbles?.success, fd: st.fouls?.drawn, fc: st.fouls?.committed,
+    yc: st.cards?.yellow, rc: st.cards?.red, off: st.offsides, pw: st.penalty?.won, ps: st.penalty?.scored, pm: st.penalty?.missed, psv: st.penalty?.saved,
+  };
+  for (const k of Object.keys(v)) if (v[k] == null || v[k] === false) delete v[k];
+  return v;
+};
+
 
 Deno.serve(async (req) => {
   const priv = await getPrivate(["hook_secret", "live_last_call", "api_daily_limit"]);
@@ -87,9 +100,9 @@ Deno.serve(async (req) => {
         const best: Record<string, unknown[]> = { home: [], away: [] };
         for (const t of fx.players) {
           best[sideOf(t.team?.id)] = (t.players || [])
-            .map((x: Fx) => ({ name: x.player?.name, rating: Number(x.statistics?.[0]?.games?.rating) || 0, min: x.statistics?.[0]?.games?.minutes || 0 }))
-            .filter((x: { rating: number }) => x.rating > 0)
-            .sort((a: { rating: number }, b: { rating: number }) => b.rating - a.rating);
+            .map((x: Fx) => ({ name: x.player?.name, rating: Number(x.statistics?.[0]?.games?.rating) || null, min: x.statistics?.[0]?.games?.minutes || 0, s: pstats(x.statistics?.[0] || {}) }))
+            .filter((x: { rating: number | null; min: number }) => x.rating || x.min > 0)
+            .sort((a: { rating: number | null }, b: { rating: number | null }) => (b.rating || 0) - (a.rating || 0));
         }
         patch.players = best;
       }

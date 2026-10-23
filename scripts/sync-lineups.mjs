@@ -48,6 +48,18 @@ try {
   console.log("Lineup columns missing (run supabase/tactics.sql):", e.message.slice(0, 200)); process.exit(0);
 }
 
+// Every number API-Football gives per player in a match, under short keys (same as live-sync)
+function pstats(st) {
+  const v = {
+    pos: st.games?.position, cap: st.games?.captain || undefined, g: st.goals?.total, a: st.goals?.assists, gc: st.goals?.conceded, sv: st.goals?.saves,
+    sh: st.shots?.total, sot: st.shots?.on, pas: st.passes?.total, kp: st.passes?.key, acc: st.passes?.accuracy,
+    tk: st.tackles?.total, blk: st.tackles?.blocks, int: st.tackles?.interceptions, du: st.duels?.total, duw: st.duels?.won,
+    dr: st.dribbles?.attempts, drs: st.dribbles?.success, fd: st.fouls?.drawn, fc: st.fouls?.committed,
+    yc: st.cards?.yellow, rc: st.cards?.red, off: st.offsides, pw: st.penalty?.won, ps: st.penalty?.scored, pm: st.penalty?.missed, psv: st.penalty?.saved,
+  };
+  for (const k of Object.keys(v)) if (v[k] == null || v[k] === false) delete v[k];
+  return v;
+}
 // Same mapping as supabase/functions/live-sync: one API-Football fixture -> our match columns.
 function fixturePatch(fx) {
   const homeId = fx.teams?.home?.id;
@@ -71,8 +83,8 @@ function fixturePatch(fx) {
   if (Array.isArray(fx.players) && fx.players.length) {
     const all = { home: [], away: [] };
     for (const t of fx.players) all[sideOf(t.team?.id)] = (t.players || [])
-      .map((x) => ({ name: x.player?.name, rating: Number(x.statistics?.[0]?.games?.rating) || 0, min: x.statistics?.[0]?.games?.minutes || 0 }))
-      .filter((x) => x.rating > 0).sort((a, b) => b.rating - a.rating);
+      .map((x) => ({ name: x.player?.name, rating: Number(x.statistics?.[0]?.games?.rating) || null, min: x.statistics?.[0]?.games?.minutes || 0, s: pstats(x.statistics?.[0] || {}) }))
+      .filter((x) => x.rating || x.min > 0).sort((a, b) => (b.rating || 0) - (a.rating || 0));
     patch.players = all;
   }
   return patch;
@@ -126,6 +138,9 @@ for (const m of matches) {
 let past = [];
 try {
   past = await db(`matches?select=id,channel,home_en,away_en,kickoff,api_fixture_id&home_score=not.is.null&live_at=is.null&kickoff=gt.${enc(iso(now - 7 * 24 * H))}&kickoff=lt.${enc(iso(now - 2 * H))}&order=kickoff.desc&limit=80`);
+  // ...and ones that only have ratings, not the detailed player stats
+  const thin = await db(`matches?select=id,channel,home_en,away_en,kickoff,api_fixture_id&home_score=not.is.null&api_fixture_id=not.is.null&players=not.is.null&players->home->0->s=is.null&kickoff=gt.${enc(iso(now - 7 * 24 * H))}&kickoff=lt.${enc(iso(now - 2 * H))}&limit=80`);
+  for (const m of thin) if (!past.some((p) => p.id === m.id)) past.push(m);
 } catch (e) { console.log("backfill skipped:", e.message.slice(0, 120)); }
 for (const m of past) if (!m.api_fixture_id) await linkFixture(m);
 const pastIds = past.filter((m) => m.api_fixture_id).map((m) => m.api_fixture_id);

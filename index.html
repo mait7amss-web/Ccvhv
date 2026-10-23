@@ -810,6 +810,16 @@ body:has(#room:not([hidden])) .cm-fab { display: none; }
 .lv-p { color: var(--muted); font-size: 12px; font-weight: 700; }
 .lv-row.now .lv-p { color: var(--chalk); }
 button.lvl { width: 100%; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0; text-align: start; }
+/* ---------- 🧍 إحصائيات اللاعب ---------- */
+.pst { display: flex; flex-direction: column; gap: 8px; }
+.pst-top { display: flex; flex-wrap: wrap; gap: 6px; }
+.pst-top span { background: var(--pitch-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 700; }
+.pst-g { background: var(--pitch-2); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.pst-g > b { font-size: 13px; margin-bottom: 2px; }
+.pst-r { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.pst-r span { color: var(--muted); }
+.pst-r em { font-style: normal; font-weight: 800; text-align: end; }
+.pst-r.hi em { color: var(--turf); }
 </style>
 </head>
 <body data-league="epl">
@@ -922,8 +932,8 @@ button.lvl { width: 100%; border: 0; background: none; color: inherit; font: inh
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=33"></script>
-<script src="tactics.js?v=33"></script>
-<script src="live.js?v=33"></script><script src="arena.js?v=33"></script><script src="community.js?v=33"></script><script src="league.js?v=33"></script><script src="tour.js?v=33"></script>
+<script src="app.js?v=34"></script>
+<script src="tactics.js?v=34"></script>
+<script src="live.js?v=34"></script><script src="arena.js?v=34"></script><script src="community.js?v=34"></script><script src="league.js?v=34"></script><script src="tour.js?v=34"></script>
 </body>
 </html>

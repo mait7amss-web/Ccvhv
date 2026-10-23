@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 33; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 34; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -98,7 +98,7 @@ const motmMine = {};           // match_id -> my star-of-the-match pick
 // Highest official rating in a finished match
 function topRated(m) {
   if (!m.players || m.home_score == null) return null;
-  return [...(m.players.home || []), ...(m.players.away || [])].sort((a, b) => b.rating - a.rating)[0] || null;
+  return [...(m.players.home || []), ...(m.players.away || [])].filter((p) => p.rating).sort((a, b) => b.rating - a.rating)[0] || null;
 }
 const seen = new Set();
 let realtime = null;
