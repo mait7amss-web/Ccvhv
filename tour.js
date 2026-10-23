@@ -126,8 +126,11 @@ async function notifPrompt() {
 const _startChatTour = startChat;
 startChat = async function () {
   const r = await _startChatTour();
-  setTimeout(() => {
-    if (!me || $("scroller").hidden || openRoomId) return;
+  setTimeout(async () => {
+    if (!me || $("scroller").hidden) return;
+    // Everyone needs a username first (existing accounts too)
+    if (people[me.id] && !people[me.id].username) await usernameSheet(true);
+    if (openRoomId) return;
     if (!tourSeen()) startTour(); else notifPrompt();
   }, 1500);
   return r;

@@ -178,6 +178,11 @@ async function drawCommunity(jump) {
     if (l.notifs) { cmTab = "notifs"; cmStack = []; }
     else if (l.post) cmStack = [{ kind: "thread", id: l.post }];
     else if (l.user) cmStack = [{ kind: "user", id: l.user }];
+    else if (l.uname) {
+      const { data: u } = await sb.from("profiles").select("id").eq("username", l.uname).maybeSingle();
+      if (u) cmStack = [{ kind: "user", id: u.id }];
+      else toast("ما لقينا هاليوزر.");
+    }
   }
   for (const b of cmTabs.children) b.setAttribute("aria-pressed", String(!cmPage() && b.dataset.tab === cmTab));
   cmFab.hidden = !community || cmPage()?.kind === "thread";
@@ -265,6 +270,7 @@ function cmDrawProfile(uid, c) {
   }
   const info = el("div", "cm-pinfo");
   info.append(el("b", null, nameOf(uid)));
+  if (people[uid]?.username) info.append(el("span", "cm-handle", "@" + people[uid].username));
   const pill = teamPill(uid); if (pill) info.append(pill);
   head.append(av, info);
   if (uid !== me.id) {
@@ -281,6 +287,9 @@ function cmDrawProfile(uid, c) {
     add("🔖 محفوظاتي", () => cmOpen("saved", null));
     add("⚙️ الإعدادات", () => openSettings());
     cmView.append(acts);
+    const ig = el("button", "cm-ig", "📸 شارك بروفايلك في انستقرام"); ig.type = "button";
+    ig.onclick = () => shareProfileCard(uid, c);
+    cmView.append(ig);
     const tourBtn = el("button", "link", "🎓 شوف الجولة التعريفية مرة ثانية"); tourBtn.type = "button";
     tourBtn.onclick = () => startTour();
     cmView.append(tourBtn);
@@ -375,14 +384,14 @@ function postCard(p, opts = {}) {
 
 function postBody(p) {
   const box = el("div", "post-body");
-  const names = (p.mentions || []).map((id) => people[id]?.name).filter(Boolean).sort((a, b) => b.length - a.length);
+  const names = (p.mentions || []).flatMap((id) => [people[id]?.name, people[id]?.username]).filter(Boolean).sort((a, b) => b.length - a.length);
   const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp((names.length ? "@(" + names.map(esc).join("|") + ")|" : "") + "#([0-9A-Za-z_\\u0621-\\u064A\\u0660-\\u0669]{2,30})", "g");
   let last = 0, mt;
   while ((mt = re.exec(p.body))) {
     box.append(p.body.slice(last, mt.index));
     if (mt[0][0] === "@") {
-      const id = (p.mentions || []).find((i) => people[i]?.name === mt[1]);
+      const id = (p.mentions || []).find((i) => people[i]?.name === mt[1] || people[i]?.username === mt[1]);
       const s = el("span", "mention" + (id === me.id ? " me" : ""), mt[0]);
       if (id) s.onclick = (e) => { e.stopPropagation(); cmOpen("user", id); };
       box.append(s);
@@ -820,9 +829,14 @@ function composeSheet({ reply = null, quote = null, take = false, match = null }
       // @mentions: names are unique, so look them up
       const names = [...new Set([...(body || "").matchAll(/@([^\s@#،,.!?؟]+)/g)].map((x) => x[1]))].slice(0, 10);
       if (names.length) {
-        const { data } = await sb.from("profiles").select("id,name").in("name", names);
-        row.mentions = (data || []).map((x) => x.id).filter((id) => id !== me.id);
-        for (const x of data || []) people[x.id] = people[x.id] || { name: x.name, team: null };
+        const lower = names.map((n) => n.toLowerCase());
+        const [{ data: byName }, { data: byUser }] = await Promise.all([
+          sb.from("profiles").select("id,name").in("name", names),
+          sb.from("profiles").select("id,name,username").in("username", lower),
+        ]);
+        const found = [...(byName || []), ...(byUser || [])];
+        row.mentions = [...new Set(found.map((x) => x.id))].filter((id) => id !== me.id);
+        for (const x of found) people[x.id] = { ...(people[x.id] || { team: null }), name: x.name, ...(x.username ? { username: x.username } : {}) };
       }
       const { data, error } = await sb.from("posts").insert(row).select(CM_COLS).single();
       if (error) return cmErr(error);
@@ -971,6 +985,7 @@ async function profileSheet(uid) {
     const av = avatarEl(uid); av.classList.add("big");
     const info = el("div", "cm-pinfo");
     info.append(el("b", null, nameOf(uid)));
+    if (people[uid]?.username) info.append(el("span", "cm-handle", "@" + people[uid].username));
     const pill = teamPill(uid); if (pill) info.append(pill);
     head.append(av, info);
     s.append(head);
@@ -1042,4 +1057,131 @@ function cmArenaStrip() {
     wrap.append(head, row); wrap.hidden = false;
   })();
   return wrap;
+}
+
+/* ---------- @username: choose one (required once), with the usual rules ---------- */
+const USERNAME_RE = /^[a-z0-9._]{3,20}$/;
+const RESERVED = new Set(["admin", "administrator", "support", "help", "hala", "madraj", "mudarraj", "official", "moderator", "mod", "root", "system", "null", "undefined", "api", "www", "staff"]);
+function usernameProblem(u) {
+  if (u.length < 3) return "لازم ٣ حروف على الأقل.";
+  if (u.length > 20) return "بحد أقصى ٢٠ حرف.";
+  if (!USERNAME_RE.test(u)) return "بس حروف إنجليزية صغيرة وأرقام و _ و .";
+  if (u.startsWith(".") || u.endsWith(".")) return "ما يبدأ أو ينتهي بنقطة.";
+  if (u.includes("..")) return "ما ينفع نقطتين ورا بعض.";
+  if (RESERVED.has(u)) return "هاليوزر محجوز.";
+  return null;
+}
+function usernameSheet(force) {
+  return new Promise((done) => {
+    openSheet(force ? "👋 اختر يوزر لحسابك" : "✏️ غيّر اليوزر", (s) => {
+      if (force) $("sheetBg").dataset.lock = "1";
+      s.append(el("p", "sheet-p", force
+        ? "صار لكل شخص في مدرج هلا يوزر خاص فيه مثل انستقرام، يعرفونك فيه ويمنشنونك ويلقونك بالبحث. اختره مرة وحدة وخلصنا."
+        : "اليوزر يطلع في صفحتك وتقدر تنمنشن فيه."));
+      const wrap = el("div", "u-wrap");
+      const inp = el("input"); inp.type = "text"; inp.id = "uName"; inp.maxLength = 20; inp.dir = "ltr";
+      inp.autocapitalize = "none"; inp.autocomplete = "off"; inp.spellcheck = false; inp.placeholder = "yourname";
+      inp.value = people[me.id]?.username || "";
+      wrap.append(el("span", "u-at", "@"), inp); wrap.dir = "ltr";
+      const msg = el("div", "u-msg");
+      s.append(wrap, msg, el("p", "sheet-p note2", "٣ إلى ٢٠ حرف: إنجليزي صغير a-z، أرقام، _ و . (ما يبدأ أو ينتهي بنقطة)"));
+      const base = ((me.email || "").split("@")[0].toLowerCase().replace(/[^a-z0-9._]/g, "").replace(/^\.+|\.+$/g, "").replace(/\.{2,}/g, ".").slice(0, 14)) || "fan";
+      const sug = el("div", "u-sug");
+      for (const x of [base.length >= 3 ? base : base + "_fan", base.slice(0, 12) + "_" + Math.floor(10 + Math.random() * 89), "hala_" + base.slice(0, 10)]) {
+        const b = el("button", "small", "@" + x); b.type = "button"; b.dir = "ltr"; b.onclick = () => { inp.value = x; check(); }; sug.append(b);
+      }
+      s.append(sug);
+      let seq = 0, timer = null;
+      const check = () => {
+        const u = inp.value.trim().toLowerCase(); if (inp.value !== u) inp.value = u;
+        const my = ++seq; const pr = u ? usernameProblem(u) : null;
+        msg.className = "u-msg"; msg.textContent = pr || "";
+        if (pr || !u) { if (pr) msg.classList.add("bad"); return; }
+        if (u === people[me.id]?.username) { msg.textContent = "✅ هذا يوزرك"; msg.classList.add("good"); return; }
+        msg.textContent = "يتحقق…";
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+          const { data } = await sb.rpc("username_available", { u });
+          if (my !== seq) return;
+          msg.textContent = data ? "✅ متاح" : "❌ مأخوذ، جرّب غيره"; msg.classList.add(data ? "good" : "bad");
+        }, 350);
+      };
+      inp.oninput = check;
+      if (inp.value) check();
+      const err = el("div", "err"); err.hidden = true;
+      const acts = el("div", "acts");
+      const save = el("button", "primary", "احفظ اليوزر"); save.type = "button";
+      save.onclick = async () => {
+        const u = inp.value.trim().toLowerCase();
+        const pr = usernameProblem(u); if (pr) { err.textContent = pr; err.hidden = false; return; }
+        save.disabled = true; err.hidden = true;
+        const { error } = await sb.from("profiles").update({ username: u }).eq("id", me.id);
+        save.disabled = false;
+        if (error) { err.textContent = error.code === "23505" ? "❌ هاليوزر مأخوذ، جرّب غيره." : error.code === "23514" ? "اليوزر ما يطابق الشروط." : "ما انحفظ. جرّب مرة ثانية."; err.hidden = false; return; }
+        people[me.id] = { ...(people[me.id] || {}), username: u };
+        closeSheet(); toast(`✅ يوزرك صار \u2066@${u}\u2069`);
+        if (community) drawCommunity(false);
+        done(u);
+      };
+      acts.append(save);
+      if (!force) { const c = el("button", "cancel", "إلغاء"); c.type = "button"; c.onclick = () => { closeSheet(); done(null); }; acts.append(c); }
+      s.append(err, acts);
+    });
+  });
+}
+
+/* ---------- 📸 profile card for Instagram stories (1080×1920) ---------- */
+async function shareProfileCard(uid, counts) {
+  toast("يجهّز البطاقة…");
+  const c = counts || (await sb.rpc("profile_counts", { u: uid })).data || {};
+  const W = 1080, H = 1920, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const x = cv.getContext("2d");
+  const t = TEAM_BY_ID[people[uid]?.team];
+  const accent = t?.color || "#2fbf5b";
+  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#0d1d14"); g.addColorStop(1, "#06100a"); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  for (let i = 0; i < 12; i += 2) { x.fillStyle = "rgba(255,255,255,.025)"; x.fillRect(0, i * 160, W, 160); }
+  const rg = x.createRadialGradient(W / 2, 640, 50, W / 2, 640, 700); rg.addColorStop(0, accent + "88"); rg.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = rg; x.fillRect(0, 0, W, H);
+  x.strokeStyle = "rgba(255,255,255,.12)"; x.lineWidth = 6; x.beginPath(); x.arc(W / 2, 640, 420, 0, Math.PI * 2); x.stroke();
+  await document.fonts?.ready;
+  x.textAlign = "center"; x.direction = "rtl"; x.fillStyle = "#eef5ef";
+  x.font = "400 92px Lalezar, Cairo, sans-serif"; x.fillText("مدرج هلا", W / 2, 200);
+  const cx = W / 2, cy = 640, r = 230;
+  x.save(); x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.closePath(); x.fillStyle = accent; x.fill(); x.clip();
+  const pic = people[uid]?.avatar_path; let drawn = false;
+  if (pic) {
+    try { const img = new Image(); img.crossOrigin = "anonymous"; img.src = avatarUrl(pic); await img.decode(); x.drawImage(img, cx - r, cy - r, r * 2, r * 2); drawn = true; } catch {}
+  }
+  if (!drawn) { x.fillStyle = t ? inkFor(t.color) : "#fff"; x.font = "800 220px Cairo, sans-serif"; x.textBaseline = "middle"; x.fillText(nameOf(uid).trim().charAt(0), cx, cy + 10); x.textBaseline = "alphabetic"; }
+  x.restore();
+  x.lineWidth = 14; x.strokeStyle = "#f2b134"; x.beginPath(); x.arc(cx, cy, r + 8, 0, Math.PI * 2); x.stroke();
+  x.fillStyle = "#ffffff"; x.font = "800 96px Cairo, sans-serif"; x.fillText(nameOf(uid), W / 2, 1010);
+  if (people[uid]?.username) { x.fillStyle = "#8fa898"; x.font = "600 60px Cairo, sans-serif"; x.direction = "ltr"; x.fillText("@" + people[uid].username, W / 2, 1095); x.direction = "rtl"; }
+  if (t) {
+    x.font = "800 52px Cairo, sans-serif"; const tw = x.measureText(t.name).width + 80;
+    x.fillStyle = t.color; x.beginPath(); (x.roundRect ? x.roundRect(W / 2 - tw / 2, 1140, tw, 90, 45) : x.rect(W / 2 - tw / 2, 1140, tw, 90)); x.fill();
+    x.fillStyle = inkFor(t.color); x.fillText(t.name, W / 2, 1203);
+  }
+  const ar = (n) => String(n || 0).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]);
+  [[c.posts, "منشور"], [c.followers, "متابع"], [c.following, "يتابع"], [c.takes_right, "رأي صدق"]].forEach(([n, label], i) => {
+    const sx = W - 135 - i * 270;
+    x.fillStyle = "rgba(255,255,255,.07)"; x.beginPath(); (x.roundRect ? x.roundRect(sx - 115, 1310, 230, 200, 36) : x.rect(sx - 115, 1310, 230, 200)); x.fill();
+    x.fillStyle = "#fff"; x.font = "800 84px Cairo, sans-serif"; x.fillText(ar(n), sx, 1420);
+    x.fillStyle = "#8fa898"; x.font = "600 40px Cairo, sans-serif"; x.fillText(label, sx, 1480);
+  });
+  x.fillStyle = "#f2b134"; x.font = "800 64px Cairo, sans-serif"; x.fillText("تابعني في مدرج هلا 🏟️", W / 2, 1680);
+  const link = location.origin + location.pathname + (people[uid]?.username ? "?u=" + people[uid].username : `?view=community&user=${uid}`);
+  x.fillStyle = "#8fa898"; x.font = "600 38px Cairo, sans-serif"; x.direction = "ltr"; x.fillText(link.replace(/^https?:\/\//, ""), W / 2, 1760);
+  const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
+  const file = new File([blob], `hala-${people[uid]?.username || "profile"}.png`, { type: "image/png" });
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "مدرج هلا", text: "تابعني في مدرج هلا 🏟️ " + link }); return; } catch (e) { if (e?.name === "AbortError") return; }
+  }
+  openSheet("📸 بطاقتك جاهزة", (s) => {
+    const im = el("img", "ig-prev"); im.src = URL.createObjectURL(blob); s.append(im);
+    s.append(el("p", "sheet-p", "اضغط مطوّل على الصورة واحفظها، وبعدين نزّلها ستوري في انستقرام. والرابط انسخ لك عشان تحطه في الستوري 👇"));
+    navigator.clipboard?.writeText(link).catch(() => {});
+    const a = el("a", "primary", "⬇️ حمّل الصورة"); a.href = im.src; a.download = file.name; a.style.textAlign = "center"; a.style.textDecoration = "none";
+    const cl = el("button", "cancel", "سكّر"); cl.type = "button"; cl.onclick = closeSheet;
+    s.append(a, cl);
+  });
 }

@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 30; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 31; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -77,7 +77,8 @@ if (!CHANNELS.some(c => c.id === channel)) channel = CHANNELS[0].id;
   if (q.get("code")) openArenaCode = q.get("code");
   if (q.get("room")) openRoomId = Number(q.get("room")) || null;
   if (q.get("view") === "community") communityLink = { post: Number(q.get("post")) || null, user: q.get("user") || null, notifs: q.has("notifs") };
-  if (q.has("league") || q.has("view")) history.replaceState(null, "", location.pathname);
+  if (q.get("u")) communityLink = { uname: q.get("u").replace(/^@/, "").toLowerCase() };
+  if (q.has("league") || q.has("view") || q.has("u")) history.replaceState(null, "", location.pathname);
 }
 if (!CHANNELS.some(c => c.id === channel)) channel = CHANNELS[0].id;
 if (!["chat", "pred", "table", "arena"].includes(view)) view = "chat";
@@ -227,10 +228,13 @@ sb.auth.onAuthStateChange((event, session) => {
 async function loadPeople(ids, force) {
   const missing = [...new Set(ids)].filter(id => force || !(id in people));
   if (!missing.length) return;
-  let { data, error } = await sb.from("profiles").select("id,name,team,avatar_path").in("id", missing);
-  if (error) ({ data } = await sb.from("profiles").select("id,name,team").in("id", missing));
+  let data, error;
+  for (const cols of ["id,name,team,avatar_path,username", "id,name,team,avatar_path", "id,name,team"]) {
+    ({ data, error } = await sb.from("profiles").select(cols).in("id", missing));
+    if (!error) break;
+  }
   for (const id of missing) if (!people[id]) people[id] = { name: "", team: null };
-  for (const p of data || []) people[p.id] = { name: p.name, team: p.team, avatar_path: p.avatar_path || null };
+  for (const p of data || []) people[p.id] = { name: p.name, team: p.team, avatar_path: p.avatar_path || null, username: p.username || null };
 }
 const nameOf = (id) => people[id]?.name || "شخص";
 
@@ -718,7 +722,7 @@ async function deleteMessage(m, btn) {
 /* ---------- Photos ---------- */
 $("attachBtn").onclick = () => $("picker").click();
 $("viewer").onclick = () => { $("viewer").hidden = true; };
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("viewer").hidden = true; closeSheet(); } });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("viewer").hidden = true; if (!$("sheetBg").dataset.lock) closeSheet(); } });
 
 // Shrink big gallery photos so they upload fast and fit the 5 MB limit.
 async function shrink(file) {
@@ -780,8 +784,8 @@ function openSheet(title, build) {
   $("sheetBg").hidden = false;
   const first = s.querySelector("input, select, textarea"); if (first) first.focus();
 }
-function closeSheet() { $("sheetBg").hidden = true; $("sheet").textContent = ""; }
-$("sheetBg").addEventListener("click", (e) => { if (e.target === $("sheetBg")) closeSheet(); });
+function closeSheet() { delete $("sheetBg").dataset.lock; $("sheetBg").hidden = true; $("sheet").textContent = ""; }
+$("sheetBg").addEventListener("click", (e) => { if (e.target === $("sheetBg") && !$("sheetBg").dataset.lock) closeSheet(); });
 function field(label, input) { const l = el("label", null, label); l.append(input); return l; }
 function textInput(id, max, value) { const i = el("input"); i.type = "text"; i.id = id; i.maxLength = max; if (value) i.value = value; return i; }
 function sheetActions(s, okText, onOk) {
@@ -825,6 +829,10 @@ $("pollBtn").onclick = () => openSheet("تصويت جديد 📊", (s) => {
 $("meBtn").onclick = () => openSheet("ملفي", (s) => {
   const nm = textInput("profName", 40, people[me.id]?.name || "");
   s.append(field("اسمك", nm));
+  const ur = el("div", "urow");
+  ur.append(el("span", null, "اليوزر"), el("b", null, people[me.id]?.username ? "@" + people[me.id].username : "ما اخترت"));
+  const ub = el("button", "small", "غيّر"); ub.type = "button"; ub.onclick = () => usernameSheet(false); ur.append(ub);
+  s.append(ur);
   const sel = el("select"); sel.id = "profTeam";
   sel.append(new Option("بدون فريق", ""));
   for (const c of CHANNELS) {
@@ -841,7 +849,7 @@ $("meBtn").onclick = () => openSheet("ملفي", (s) => {
     const { error } = await sb.from("profiles").update({ name, team: sel.value || null }).eq("id", me.id);
     if (error?.code === "23505") return "الاسم \"" + name + "\" مستخدم من شخص ثاني. اختر اسم غيره.";
     if (error) return "ما انحفظ. جرّب مرة ثانية.";
-    people[me.id] = { name, team: sel.value || null };
+    people[me.id] = { ...(people[me.id] || {}), name, team: sel.value || null };
     renderMe(); refreshView();
   });
   const out = el("button", "link danger", "تسجيل خروج"); out.type = "button";
