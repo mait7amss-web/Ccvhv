@@ -23,6 +23,11 @@ function svDefaultTeam(f, top) {
 }
 
 /* ---------- open: pick a match, give it a title ---------- */
+// Big clubs (names as in the matches table): only their upcoming matches are offered for analysis
+const SV_BIG = new Set(["ريال مدريد", "برشلونة", "أتلتيكو مدريد", "مانشستر سيتي", "ليفربول", "أرسنال", "تشيلسي", "مانشستر يونايتد", "توتنهام",
+  "بايرن ميونخ", "بوروسيا دورتموند", "باير ليفركوزن", "باريس سان جيرمان", "يوفنتوس", "إنتر", "ميلان", "نابولي"]);
+const svBig = (m) => SV_BIG.has(m.home) || SV_BIG.has(m.away);
+
 // For a match without an official lineup yet: each team's latest official XI (its likely lineup)
 async function svLastXI(team) {
   const cols = "home,away,kickoff,lineups";
@@ -63,10 +68,11 @@ async function studioOpen({ match = null, reply = null } = {}) {
     const cols = "id,channel,home,away,kickoff,status,lineups,home_score,away_score,live_home,live_away,players";
     const [up, past] = await Promise.all([
       sb.from("matches").select(cols).gt("kickoff", new Date(now - 3 * 3600000).toISOString()).lt("kickoff", new Date(now + 8 * D).toISOString())
-        .not("status", "in", "(FINISHED,POSTPONED,CANCELLED)").order("kickoff", { ascending: true }).limit(40),
+        .not("status", "in", "(FINISHED,POSTPONED,CANCELLED)").order("kickoff", { ascending: true }).limit(150),
       sb.from("matches").select(cols).not("lineups", "is", null).gt("kickoff", new Date(now - 8 * D).toISOString()).lt("kickoff", new Date(now).toISOString())
         .eq("status", "FINISHED").order("kickoff", { ascending: false }).limit(30),
     ]);
+    up.data = (up.data || []).filter(svBig).slice(0, 30);
     list.textContent = "";
     const blank = el("button", "sv-pick"); blank.type = "button";
     blank.append(el("b", null, "⬜ لوحة فاضية"), el("span", null, "فريقين بدون أسماء، ترتّبهم مثل ما تبي"));
@@ -91,7 +97,7 @@ async function studioOpen({ match = null, reply = null } = {}) {
       };
       list.append(b);
     };
-    if ((up.data || []).length) { list.append(el("div", "sv-sec", "⏭️ المباريات الجاية: حلّل قبلها وتوقّع")); for (const m of up.data) add(m, true); }
+    if ((up.data || []).length) { list.append(el("div", "sv-sec", "⏭️ مباريات الكبار الجاية: حلّل قبلها وتوقّع")); for (const m of up.data) add(m, true); }
     if ((past.data || []).length) { list.append(el("div", "sv-sec", "📋 اللي صارت: حلّل وش صار")); for (const m of past.data) add(m, false); }
     if (!(up.data || []).length && !(past.data || []).length) list.append(el("p", "sheet-p", "ما فيه مباريات هالأيام. جرّب اللوحة الفاضية."));
     const c = el("button", "cancel", "إلغاء"); c.type = "button"; c.onclick = closeSheet; s.append(c);

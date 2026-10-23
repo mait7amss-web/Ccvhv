@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 40; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 41; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -1154,7 +1154,7 @@ function matchCard(m, preds, started) {
   if (inLiveWindow(m)) { const b = el("button", "small pri", "🔴 غرفة المباراة"); b.type = "button"; b.onclick = () => enterRoom(m); tools.prepend(b); }
   else if (started && Date.now() - new Date(m.kickoff) < 4 * 86400000) { const b = el("button", "small", "📊 تقرير المدرج"); b.type = "button"; b.onclick = () => matchReport(m); tools.append(b); }
   // 🎬 Analyse an upcoming match on video (studio.js)
-  if (!started && typeof studioOpen === "function") { const b = el("button", "small", "🎬 حلّلها"); b.type = "button"; b.onclick = (e) => { e.stopPropagation(); studioOpen({ match: m }); }; tools.append(b); }
+  if (!started && typeof studioOpen === "function" && svBig(m)) { const b = el("button", "small", "🎬 حلّلها"); b.type = "button"; b.onclick = (e) => { e.stopPropagation(); studioOpen({ match: m }); }; tools.append(b); }
   if (tools.childNodes.length) card.append(tools);
   // Tap a started match to see its details (stats, lineups, events)
   if (started) {
