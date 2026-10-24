@@ -1,6 +1,6 @@
 // مدرج هلا: يستقبل الإشعارات ويفتح التطبيق على الدوري الصحيح لما تضغطها.
 // Keeps the app's files on the phone so it opens instantly, and refreshes them in the background.
-const SHELL = "hala-shell-1";
+const SHELL = "hala-shell-2";   // bumping this clears every saved file
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil((async () => {
   for (const k of await caches.keys()) if (k !== SHELL) await caches.delete(k);
@@ -23,10 +23,12 @@ async function cacheFirst(req) {
   }
   return res;
 }
-async function networkFirst(req, ms) {
+// The page itself always comes from the network (however slow), so a new version is never missed;
+// the saved copy is only for when there's no connection at all.
+async function networkFirst(req) {
   const cache = await caches.open(SHELL);
   try {
-    const res = await Promise.race([fetch(req.url, { cache: "no-cache", credentials: "same-origin" }), new Promise((_, rej) => setTimeout(() => rej(new Error("slow")), ms))]);
+    const res = await fetch(req.url, { cache: "no-cache", credentials: "same-origin" });
     if (res.ok) cache.put(req, res.clone());
     return res;
   } catch (e) {
@@ -47,7 +49,7 @@ self.addEventListener("fetch", (e) => {
   const u = new URL(req.url);
   if (u.origin === location.origin) {
     if (u.pathname.endsWith("version.json") || u.pathname.endsWith("sw.js") || u.pathname.endsWith(".mp4")) return;   // always live
-    if (req.mode === "navigate") return e.respondWith(networkFirst(req, 3500));
+    if (req.mode === "navigate") return e.respondWith(networkFirst(req));
     if (STATIC.test(u.pathname)) return e.respondWith(u.searchParams.has("v") || u.pathname.includes("/stickers/") || /icon|apple-touch/.test(u.pathname) ? cacheFirst(req) : staleWhileRevalidate(req));
     return;
   }

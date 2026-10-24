@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 53; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 54; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -31,6 +31,9 @@ async function checkForUpdate() {
     const { v } = await r.json();
     if (v > APP_VERSION && sessionStorage.getItem("hala.reloadedFor") !== String(v)) {
       sessionStorage.setItem("hala.reloadedFor", String(v));
+      // Drop the saved copy of the page and fetch the newest service worker before reloading
+      try { const c = await caches.open("hala-shell-2"); for (const k of await c.keys()) if (!/\.(js|css|png|jpe?g|webp|svg|gif|woff2?|webmanifest)$/i.test(new URL(k.url).pathname)) await c.delete(k); } catch {}
+      try { await (await navigator.serviceWorker?.getRegistration())?.update(); } catch {}
       // A new address (?v=NN) so neither GitHub's cache nor the browser's can hand back the old page
       location.replace(location.pathname + "?v=" + v + location.hash);
     }
