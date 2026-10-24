@@ -31,3 +31,8 @@ export const FAV_TO_FD = {
   bayern: 5, dortmund: 4, leverkusen: 3, leipzig: 721, frankfurt: 19, stuttgart: 10, gladbach: 18, wolfsburg: 11,
   psg: 524, marseille: 516, lyon: 523, monaco: 548, lille: 521, nice: 522, lens: 546, rennes: 529,
 };
+
+// The big clubs the app is about: only matches with at least one of them are kept (football-data ids).
+// Man City, Liverpool, Arsenal, Chelsea, Man United, Tottenham, Real Madrid, Barcelona, Atlético,
+// Bayern, Dortmund, Leverkusen, PSG, Juventus, Inter, Milan, Napoli.
+export const BIG_FD = new Set([65, 64, 57, 61, 66, 73, 86, 81, 78, 5, 4, 3, 524, 109, 108, 98, 113]);

@@ -17,7 +17,7 @@ const COMPETITIONS = { PL: "epl", PD: "laliga", SA: "seriea", BL1: "bundesliga",
 const DAYS_BACK = 3;   // catch late results
 const DAYS_AHEAD = 7;  // free tier allows a 10-day window per request
 
-import { AR } from "./teams.mjs";
+import { AR, BIG_FD } from "./teams.mjs";
 const teamName = (t) => (AR[t.id] || t.shortName || t.name || "؟").slice(0, 40);
 
 const iso = (d) => d.toISOString().slice(0, 10);
@@ -83,7 +83,8 @@ for (const [code, channel] of Object.entries(COMPETITIONS)) {
   try {
     const matches = await fetchCompetition(code);
     // Skip fixtures whose teams aren't decided yet.
-    const rows = matches.filter((m) => m.homeTeam?.id && m.awayTeam?.id).map((m) => toRow(m, channel));
+    // Only the big clubs' matches: everything else is left out of the app.
+    const rows = matches.filter((m) => m.homeTeam?.id && m.awayTeam?.id && (BIG_FD.has(m.homeTeam.id) || BIG_FD.has(m.awayTeam.id))).map((m) => toRow(m, channel));
     await upsert(rows);
     console.log(`${code}: ${rows.length} matches synced`);
     const teams = new Map();
