@@ -237,7 +237,7 @@ const cmVisible = (p) => p && !blocked.has(p.user_id) && !hiddenLocal.has("p" + 
 function cmDrawFeed(key, title) {
   if (title) cmView.append(el("h2", "cm-title", title));
   if (key === "all" || key === "following") cmView.append(cmPrompt());
-  if (key === "all") cmView.append(cmArenaStrip(), studioStrip());
+  if (key === "all") cmView.append(typeof inviteStrip === "function" ? inviteStrip() : el("div"), cmArenaStrip(), studioStrip());
   const feed = cmFeeds[key] || { ids: [] };
   const list = feed.ids.map((id) => cmPosts[id]).filter(cmVisible);
   if (!list.length) {
@@ -310,6 +310,7 @@ function cmDrawProfile(uid, c) {
     const add = (label, fn) => { const b = el("button", "ghost", label); b.type = "button"; b.onclick = fn; acts.append(b); };
     add("📷 صورتي", avatarSheet);
     add("🔖 محفوظاتي", () => cmOpen("saved", null));
+    add("🎁 ادعُ أصحابك", () => inviteSheet());
     add("⚙️ الإعدادات", () => openSettings());
     cmView.append(acts);
     const ig = el("button", "cm-ig", "📸 شارك بروفايلك في انستقرام"); ig.type = "button";

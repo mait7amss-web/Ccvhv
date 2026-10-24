@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 44; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 45; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -79,6 +79,7 @@ if (!CHANNELS.some(c => c.id === channel)) channel = CHANNELS[0].id;
   if (q.get("room")) openRoomId = Number(q.get("room")) || null;
   if (q.get("dm")) openDmId = Number(q.get("dm")) || null;
   if (q.get("view") === "community") communityLink = { post: Number(q.get("post")) || null, user: q.get("user") || null, notifs: q.has("notifs") };
+  if (q.get("ref")) try { localStorage.setItem("hala.ref", q.get("ref").slice(0, 40)); } catch {}
   if (q.get("u")) communityLink = { uname: q.get("u").replace(/^@/, "").toLowerCase() };
   if (q.has("league") || q.has("view") || q.has("u")) history.replaceState(null, "", location.pathname);
 }
