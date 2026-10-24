@@ -245,7 +245,7 @@ async function cmLoadMembers() {
 function cmDrawMembers() {
   const list = cmMembers || [];
   const head = el("div", "mb-head");
-  head.append(el("h2", "cm-title", `👥 أعضاء مدرج هلا (${arNum(list.length)})`));
+  head.append(el("h2", "cm-title", `أعضاء مدرج هلا (${arNum(list.length)})`));
   const inp = el("input", "sr-in"); inp.type = "search"; inp.placeholder = "🔍 فلتر بالاسم أو اليوزر أو الفريق"; inp.value = cmMemberQuery; inp.maxLength = 30;
   head.append(inp);
   const box = el("div", "mb-list");
