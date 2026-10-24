@@ -34,9 +34,8 @@ const cmView = el("div", "wrap pane cm"); cmView.id = "communityView"; cmView.hi
 $("scroller").append(cmView);
 const cmTabs = el("div", "wrap views cm-tabs"); cmTabs.id = "cViews"; cmTabs.hidden = true;
 $("strip").append(cmTabs);
-for (const [id, label] of [["all", "الكل"], ["members", "الأعضاء"], ["search", "🔍"], ["notifs", "🔔"]]) {
+for (const [id, label] of [["all", "الكل"], ["members", "الأعضاء"], ["search", "البحث"], ["notifs", "🔔"]]) {
   const b = el("button", null, label); b.type = "button"; b.dataset.tab = id;
-  if (id === "search") b.setAttribute("aria-label", "البحث");
   if (id === "notifs") { b.setAttribute("aria-label", "الإشعارات"); b.append(el("span", "cm-badge")); }
   b.onclick = () => { cmTab = id; cmStack = []; drawCommunity(true); };
   cmTabs.append(b);

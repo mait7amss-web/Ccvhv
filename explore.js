@@ -124,7 +124,7 @@ let cmQuery = "", cmSearchSeq = 0;
 const norm = (s) => String(s || "").toLowerCase().replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي").replace(/[ً-ْ]/g, "").trim();
 function cmDrawSearch() {
   const box = el("div", "sr-box");
-  const inp = el("input", "sr-in"); inp.type = "search"; inp.placeholder = "🔍 ابحث عن شخص، فريق، منشور، أو #هاشتاق"; inp.value = cmQuery; inp.maxLength = 40;
+  const inp = el("input", "sr-in"); inp.type = "search"; inp.placeholder = "ابحث عن شخص، فريق، منشور، أو #هاشتاق"; inp.value = cmQuery; inp.maxLength = 40;
   inp.enterKeyHint = "search";
   const res = el("div", "sr-res");
   box.append(inp);
@@ -246,7 +246,7 @@ function cmDrawMembers() {
   const list = cmMembers || [];
   const head = el("div", "mb-head");
   head.append(el("h2", "cm-title", `أعضاء مدرج هلا (${arNum(list.length)})`));
-  const inp = el("input", "sr-in"); inp.type = "search"; inp.placeholder = "🔍 فلتر بالاسم أو اليوزر أو الفريق"; inp.value = cmMemberQuery; inp.maxLength = 30;
+  const inp = el("input", "sr-in"); inp.type = "search"; inp.placeholder = "فلتر بالاسم أو اليوزر أو الفريق"; inp.value = cmMemberQuery; inp.maxLength = 30;
   head.append(inp);
   const box = el("div", "mb-list");
   cmView.append(head, box);
