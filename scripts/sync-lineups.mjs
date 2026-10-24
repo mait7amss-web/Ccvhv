@@ -159,7 +159,8 @@ console.log(`API-Football calls this run: ${apiCalls}`);
 // ---- 3. "lineup is out" notifications ----
 // Lineups that are out for matches not started yet (filled in by live-sync); push_log stops repeats.
 const newLineups = matches.filter((m) => m.lineups && new Date(m.kickoff).getTime() > now - 15 * 60000);
-if (!newLineups.length) process.exit(0);
+// Goals-only notifications: no lineup pushes
+if (!newLineups.length || true) process.exit(0);
 const pub = (await db("app_public?key=eq.vapid_public&select=value"))[0]?.value;
 const priv = (await db("app_private?key=eq.vapid_private&select=value"))[0]?.value;
 if (!pub || !priv) process.exit(0);

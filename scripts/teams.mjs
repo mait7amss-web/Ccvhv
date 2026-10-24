@@ -34,5 +34,5 @@ export const FAV_TO_FD = {
 
 // The big clubs the app is about: only matches with at least one of them are kept (football-data ids).
 // Man City, Liverpool, Arsenal, Chelsea, Man United, Tottenham, Real Madrid, Barcelona, Atlético,
-// Bayern, Dortmund, Leverkusen, PSG, Juventus, Inter, Milan, Napoli.
-export const BIG_FD = new Set([65, 64, 57, 61, 66, 73, 86, 81, 78, 5, 4, 3, 524, 109, 108, 98, 113]);
+// Bayern, PSG, Juventus, Inter, Milan, Napoli.
+export const BIG_FD = new Set([65, 64, 57, 61, 66, 73, 86, 81, 78, 5, 524, 109, 108, 98, 113]);

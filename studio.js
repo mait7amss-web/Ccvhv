@@ -35,7 +35,7 @@ function svDefaultTeam(f, top) {
 /* ---------- open: pick a match, give it a title ---------- */
 // Big clubs (names as in the matches table): only their upcoming matches are offered for analysis
 const SV_BIG = new Set(["ريال مدريد", "برشلونة", "أتلتيكو مدريد", "مانشستر سيتي", "ليفربول", "أرسنال", "تشيلسي", "مانشستر يونايتد", "توتنهام",
-  "بايرن ميونخ", "بوروسيا دورتموند", "باير ليفركوزن", "باريس سان جيرمان", "يوفنتوس", "إنتر", "ميلان", "نابولي"]);
+  "بايرن ميونخ", "باريس سان جيرمان", "يوفنتوس", "إنتر", "ميلان", "نابولي"]);
 const svBig = (m) => SV_BIG.has(m.home) || SV_BIG.has(m.away);
 
 // For a match without an official lineup yet: each team's latest official XI (its likely lineup)

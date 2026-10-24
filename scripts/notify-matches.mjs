@@ -33,6 +33,9 @@ if (!pub || !priv) {
   console.log("Created push keys");
 }
 webpush.setVapidDetails("mailto:hala@example.com", pub, priv);
+// The app only sends goal notifications now (from the live feed); reminders and results are off.
+const GOALS_ONLY = true;
+if (GOALS_ONLY) { console.log("Goals-only mode: no reminders or results"); process.exit(0); }
 
 const subs = await api("push_subscriptions?select=endpoint,p256dh,auth,user_id,reminders,results");
 if (!subs.length) { console.log("No subscribers"); process.exit(0); }

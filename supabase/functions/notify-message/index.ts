@@ -33,6 +33,9 @@ async function loadConfig() {
   return config;
 }
 
+// The app only sends goal notifications (official goals from the live feed).
+const GOALS_ONLY = true;
+
 Deno.serve(async (req) => {
   const cfg = await loadConfig();
   if (!cfg.secret || req.headers.get("x-hala-secret") !== cfg.secret) return new Response("forbidden", { status: 403 });
@@ -40,6 +43,8 @@ Deno.serve(async (req) => {
 
   const input = await req.json().catch(() => ({}));
   if (input.event_id) return crowdEvent(input.event_id);
+  // Goals only: chat, debates, community, direct messages and other match moments don't send pushes
+  if (GOALS_ONLY) return new Response("goals-only mode", { status: 200 });
   if (input.arena_id) return arenaStart(input.arena_id);
   if (input.notif_id) return communityNotif(input.notif_id);
   if (input.dm_id) return directMessage(input.dm_id);
@@ -115,6 +120,7 @@ async function crowdEvent(eventId: number) {
   let { data: ev, error: evErr } = await sb.from("crowd_events").select("id,match_id,kind,side,emoji,minute,scorer,detail").eq("id", eventId).maybeSingle();
   if (evErr) ({ data: ev } = await sb.from("crowd_events").select("id,match_id,kind,side,emoji,minute").eq("id", eventId).maybeSingle());
   if (!ev) return new Response("gone", { status: 200 });
+  if (GOALS_ONLY && ev.kind !== "official") return new Response("goals-only mode", { status: 200 });
   let { data: m, error: mErr } = await sb.from("matches").select("id,channel,home,away,live_home,live_away").eq("id", ev.match_id).maybeSingle();
   if (mErr) ({ data: m } = await sb.from("matches").select("id,channel,home,away").eq("id", ev.match_id).maybeSingle());
   if (!m) return new Response("gone", { status: 200 });
