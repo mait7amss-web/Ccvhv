@@ -224,3 +224,74 @@ avatarEl = function (id) {
   if (id === OFFICIAL_ID) { av.textContent = ""; av.classList.add("has-pic", "official"); av.style.backgroundImage = 'url("icon-192.png")'; }
   return av;
 };
+
+/* ---------- 👥 all members ---------- */
+let cmMembers = null, cmMembersAt = 0, cmMemberQuery = "";
+async function cmLoadMembers() {
+  if (cmMembers && Date.now() - cmMembersAt < 2 * 60000) return;
+  const { data } = await sb.from("profiles").select("id,name,team,avatar_path,username,verified,created_at").not("banned", "is", true).order("created_at", { ascending: true }).limit(1000);
+  const list = (data || []).filter((p) => !blocked.has(p.id));
+  for (const p of list) people[p.id] = { ...(people[p.id] || {}), name: p.name, team: p.team, avatar_path: p.avatar_path || null, username: p.username || null, verified: !!p.verified };
+  // Levels, 100 at a time
+  const ids = list.map((p) => p.id);
+  const chunks = []; for (let i = 0; i < ids.length; i += 100) chunks.push(ids.slice(i, i + 100));
+  const lv = await Promise.all(chunks.map((c) => sb.rpc("user_levels", { ids: c }).then((r) => r.data || [], () => [])));
+  for (const x of lv.flat()) if (people[x.id]) people[x.id].xp = x.xp;
+  // The official account first, then the most active
+  cmMembers = list.map((p) => ({ id: p.id, at: p.created_at })).sort((a, b) =>
+    (b.id === OFFICIAL_ID) - (a.id === OFFICIAL_ID) || (people[b.id]?.xp || 0) - (people[a.id]?.xp || 0));
+  cmMembersAt = Date.now();
+}
+function cmDrawMembers() {
+  const list = cmMembers || [];
+  const head = el("div", "mb-head");
+  head.append(el("h2", "cm-title", `👥 أعضاء مدرج هلا (${arNum(list.length)})`));
+  const inp = el("input", "sr-in"); inp.type = "search"; inp.placeholder = "🔍 فلتر بالاسم أو اليوزر أو الفريق"; inp.value = cmMemberQuery; inp.maxLength = 30;
+  head.append(inp);
+  const box = el("div", "mb-list");
+  cmView.append(head, box);
+  const draw = () => {
+    box.textContent = "";
+    const q = norm(cmMemberQuery);
+    const rows = list.filter(({ id }) => {
+      if (!q) return true;
+      const p = people[id] || {};
+      return norm(p.name).includes(q) || norm(p.username).includes(q) || norm(TEAM_BY_ID[p.team]?.name).includes(q);
+    });
+    if (!rows.length) { box.append(cmEmpty("🔍", "ما لقينا أحد", "جرّب اسم ثاني.")); return; }
+    for (const { id } of rows) {
+      const r = el("div", "mb-row");
+      const who = el("button", "mb-who"); who.type = "button";
+      const info = el("div", "dm-info");
+      const top = el("div", "dm-top"); top.append(el("b", null, nameOf(id) + (id === me.id ? " (أنت)" : "")));
+      const lvb = levelBadge(id); if (lvb) top.append(lvb);
+      info.append(top);
+      const sub = el("div", "mb-sub");
+      if (people[id]?.username) sub.append(el("span", "cm-handle", "@" + people[id].username));
+      const pill = teamPill(id); if (pill) sub.append(pill);
+      info.append(sub);
+      who.append(avatarEl(id), info);
+      who.onclick = () => cmOpen("user", id);
+      r.append(who);
+      if (id !== me.id) {
+        const on = cmFollowing.has(id);
+        const f = el("button", on ? "ghost mb-f" : "primary mb-f", on ? "تتابعه ✓" : "تابع"); f.type = "button";
+        f.onclick = async () => {
+          f.disabled = true;
+          const follow = !cmFollowing.has(id);
+          const { error } = follow ? await sb.from("follows").insert({ follower: me.id, followee: id })
+            : await sb.from("follows").delete().eq("follower", me.id).eq("followee", id);
+          f.disabled = false;
+          if (error && error.code !== "23505") { toast("ما انحفظ."); return; }
+          if (follow) cmFollowing.add(id); else cmFollowing.delete(id);
+          delete cmFeeds.following;
+          f.className = follow ? "ghost mb-f" : "primary mb-f"; f.textContent = follow ? "تتابعه ✓" : "تابع";
+        };
+        r.append(f);
+      }
+      box.append(r);
+    }
+  };
+  let t; inp.oninput = () => { cmMemberQuery = inp.value; clearTimeout(t); t = setTimeout(draw, 150); };
+  draw();
+}
