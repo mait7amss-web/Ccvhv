@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 46; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 47; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -438,7 +438,7 @@ async function refreshView(jump) {
   $("predView").hidden = view !== "pred";
   $("tableView").hidden = view !== "table";
   $("arenaView").hidden = view !== "arena";
-  $("chatFooter").hidden = true;
+  $("chatFooter").hidden = !(typeof roomMatch !== "undefined" && roomMatch);   // stays on inside a match room
   if (view === "arena") { if (jump) $("scroller").scrollTop = 0; return renderArenaView(); }
   if (view === "chat") {
     // "المباريات": a room per match instead of one league chat
@@ -1465,6 +1465,11 @@ $("plusBtn").onclick = () => openSheet("أرسل", (s) => {
   item("😎", "ملصق أو GIF", "ملصقات الكورة أو بحث GIF", () => $("stickerBtn").click());
   item("🧠", "لوحة تكتيك", "ارسم الخطة والتحركات على الملعب", () => tacticEditor());
   item("⚔️", "مناظرة", "سؤال بطرفين، وأقوى حجة تفوز", () => debateComposer());
+  // In a match room: rate the players of this match
+  if (typeof roomMatch !== "undefined" && roomMatch) item("⭐", "قيّم اللاعبين", "التشكيلة والتقييم الرسمي، وقيّم أنت", () => {
+    const m = matchCache[roomMatch.id] || roomMatch;
+    if (m.lineups) lineupSheet(m); else ratingsSheet(m);
+  });
   s.append(list);
 });
 

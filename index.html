@@ -954,6 +954,13 @@ body.sv-on .cm-fab, body:has(#studio) .cm-fab { display: none; }
 .inv-row.me { box-shadow: 0 0 0 2px #2fbf5b inset; }
 .inv-row .avatar { width: 32px; height: 32px; } .inv-row b { flex: 1; min-width: 0; font-size: 14px; }
 .inv-rank { width: 26px; text-align: center; font-weight: 800; } .inv-n { font: 400 22px var(--display); color: #2fbf5b; }
+/* the chat bar inside a match room */
+#room #chatFooter { display: block; flex: none; background: var(--pitch-2); border-top: 1px solid var(--line); }
+#room #chatFooter .wrap { padding: 8px max(10px, env(safe-area-inset-right, 0px)) 8px max(10px, env(safe-area-inset-left, 0px)); max-width: none; }
+#room #composer .goalbtn { flex: none; padding: 9px 10px; font-size: 13px; border-radius: 18px; }
+#room .rcompose[hidden] { display: none; }
+#room .roomtag { display: none; }
+#room #composer #msg { min-width: 0; }
 </style>
 </head>
 <body data-league="epl">
@@ -1066,8 +1073,8 @@ body.sv-on .cm-fab, body:has(#studio) .cm-fab { display: none; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=46"></script>
-<script src="tactics.js?v=46"></script>
-<script src="live.js?v=46"></script><script src="arena.js?v=46"></script><script src="community.js?v=46"></script><script src="explore.js?v=46"></script><script src="studio.js?v=46"></script><script src="invite.js?v=46"></script><script src="league.js?v=46"></script><script src="tour.js?v=46"></script><script src="dm.js?v=46"></script>
+<script src="app.js?v=47"></script>
+<script src="tactics.js?v=47"></script>
+<script src="live.js?v=47"></script><script src="arena.js?v=47"></script><script src="community.js?v=47"></script><script src="explore.js?v=47"></script><script src="studio.js?v=47"></script><script src="invite.js?v=47"></script><script src="league.js?v=47"></script><script src="tour.js?v=47"></script><script src="dm.js?v=47"></script>
 </body>
 </html>

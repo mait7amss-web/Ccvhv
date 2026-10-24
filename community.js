@@ -75,7 +75,7 @@ refreshView = async function (jump) {
   leagueTabs.hidden = community; cmTabs.hidden = !community;
   cmView.hidden = !community; cmFab.hidden = !community || cmPage()?.kind === "thread";
   if (!community) { cmNewPill.hidden = true; return _refreshViewCm(jump); }
-  for (const id of ["thread", "roomsView", "predView", "tableView", "arenaView", "chatFooter", "liveBanner"]) if ($(id)) $(id).hidden = true;
+  for (const id of ["thread", "roomsView", "predView", "tableView", "arenaView", "chatFooter", "liveBanner"]) if ($(id) && !(id === "chatFooter" && roomMatch)) $(id).hidden = true;
   return drawCommunity(jump);
 };
 

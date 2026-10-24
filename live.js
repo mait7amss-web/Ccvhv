@@ -135,6 +135,7 @@ async function enterRoom(m) {
   roomMatch = m; matchCache[m.id] = { ...(matchCache[m.id] || {}), ...m };
   document.body.dataset.league = m.channel || channel;
   room.hidden = false;
+  roomFooter(true);
   $("rHome").textContent = m.home; $("rAway").textContent = m.away;
   $("rMomHN").textContent = m.home; $("rMomAN").textContent = m.away;
   $("rCrowd").hidden = true; crowdGoals = { home: 0, away: 0 };
@@ -191,6 +192,7 @@ function leaveRoom(silent) {
   flushReactions();
   roomTimers.forEach(clearInterval); roomTimers = [];
   roomCh?.unsubscribe(); roomCh = null; roomMatch = null;
+  roomFooter(false);
   room.hidden = true;
   document.body.dataset.league = channel;
   if (!silent) render(false);
@@ -228,7 +230,33 @@ function renderRoomFeed(jump) {
 }
 // re-render the room whenever the app re-renders the chat (reactions, votes, replies…)
 const _render = render;
-render = async function (jump) { const r = await _render(jump); if (roomMatch) renderRoomFeed(false); return r; };
+render = async function (jump) { const r = await _render(jump); if (roomMatch) renderRoomFeed(!!jump); return r; };
+
+// The full chat bar (voice, stickers, photos, GIF, polls, tactics, replies, @mentions) works inside the
+// match room: while a room is open, everything sent goes to that room.
+const _insertMessageRoom = insertMessage;
+insertMessage = function (row) {
+  if (roomMatch && !row.match_id) row = { ...row, channel: roomMatch.channel, match_id: roomMatch.id };
+  return _insertMessageRoom(row);
+};
+const _showErrRoom = showErr;
+showErr = function (msg) { _showErrRoom(msg); if (roomMatch && msg) toast(msg); };
+const footerHome = { parent: $("chatFooter").parentNode, next: $("chatFooter").nextSibling };
+function roomFooter(on) {
+  const f = $("chatFooter");
+  if (on) {
+    $("rCompose").after(f); f.hidden = false;
+    $("composer").prepend($("rGoal"));      // keep the ⚽ goal button next to the message box
+    $("rCompose").hidden = true;
+    $("msg").placeholder = "علّق…";
+  } else {
+    footerHome.parent.insertBefore(f, footerHome.next); f.hidden = true;
+    $("rCompose").prepend($("rGoal"));
+    $("rCompose").hidden = false;
+    $("msg").placeholder = "اكتب رأيك…";
+    if (typeof clearReply === "function") clearReply();
+  }
+}
 
 $("rCompose").addEventListener("submit", async (e) => {
   e.preventDefault();
