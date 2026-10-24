@@ -955,6 +955,26 @@ body.sv-on .cm-fab, body:has(#studio) .cm-fab { display: none; }
 .inv-row .avatar { width: 32px; height: 32px; } .inv-row b { flex: 1; min-width: 0; font-size: 14px; }
 .inv-rank { width: 26px; text-align: center; font-weight: 800; } .inv-n { font: 400 22px var(--display); color: #2fbf5b; }
 /* the chat bar inside a match room */
+/* 🎙️ voice space in match rooms */
+.spc-bar { flex: none; margin: 6px 10px 0; padding: 8px 10px; border-radius: 14px; background: linear-gradient(135deg, #1c1236, var(--card)); border: 1px solid #3b2a66; }
+.spc-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
+.spc-live { font-weight: 800; }
+.spc-live i { font-style: normal; font-size: 11px; background: #e0245e; color: #fff; padding: 1px 7px; border-radius: 99px; margin-inline-start: 4px; animation: spc-pulse 1.6s infinite; }
+@keyframes spc-pulse { 50% { opacity: .55; } }
+.spc-count { color: var(--muted); font-size: 12px; }
+.spc-spk { display: flex; gap: 10px; overflow-x: auto; padding: 8px 2px; min-height: 30px; align-items: center; }
+.spc-empty { color: var(--muted); font-size: 12.5px; }
+.spc-sp { flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; background: none; border: 0; color: var(--chalk); font: inherit; font-size: 11px; max-width: 64px; position: relative; padding: 0; }
+.spc-sp > span { max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spc-sp .av, .spc-sp img, .spc-sp > :first-child { border-radius: 50%; box-shadow: 0 0 0 2px #3b2a66; transition: box-shadow .15s; }
+.spc-sp.talk > :first-child { box-shadow: 0 0 0 3px #a78bfa, 0 0 14px #a78bfa; }
+.spc-sp.lm { opacity: .5; }
+.spc-sp > i { position: absolute; top: -4px; inset-inline-end: -2px; font-style: normal; font-size: 12px; }
+.spc-btns { display: flex; gap: 8px; }
+.spc-mic { flex: 1; border: 0; border-radius: 99px; padding: 8px; font: inherit; font-weight: 800; background: #7c3aed; color: #fff; }
+.spc-mic.on { background: #e0245e; }
+.spc-mic:disabled { opacity: .6; }
+.spc-out { border: 1px solid #3b2a66; background: none; color: var(--chalk); border-radius: 99px; padding: 6px 14px; font-size: 16px; }
 #room #chatFooter { display: block; flex: none; background: var(--pitch-2); border-top: 1px solid var(--line); }
 #room #chatFooter .wrap { padding: 8px max(10px, env(safe-area-inset-right, 0px)) 8px max(10px, env(safe-area-inset-left, 0px)); max-width: none; }
 #room #composer .goalbtn { flex: none; padding: 9px 10px; font-size: 13px; border-radius: 18px; }
@@ -1081,8 +1101,8 @@ body.sv-on .cm-fab, body:has(#studio) .cm-fab { display: none; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=54"></script>
-<script src="tactics.js?v=54"></script>
-<script src="live.js?v=54"></script><script src="arena.js?v=54"></script><script src="community.js?v=54"></script><script src="explore.js?v=54"></script><script src="studio.js?v=54"></script><script src="invite.js?v=54"></script><script src="league.js?v=54"></script><script src="tour.js?v=54"></script><script src="dm.js?v=54"></script>
+<script src="app.js?v=55"></script>
+<script src="tactics.js?v=55"></script>
+<script src="live.js?v=55"></script><script src="arena.js?v=55"></script><script src="community.js?v=55"></script><script src="explore.js?v=55"></script><script src="studio.js?v=55"></script><script src="invite.js?v=55"></script><script src="league.js?v=55"></script><script src="tour.js?v=55"></script><script src="dm.js?v=55"></script><script src="voice.js?v=55"></script>
 </body>
 </html>

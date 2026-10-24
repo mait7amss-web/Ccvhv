@@ -113,6 +113,7 @@ room.innerHTML = `
   <div class="celebrate" id="rCeleb" hidden></div>`;
 document.body.append(room);
 
+let roomPresence = { at: 0 };
 let roomMatch = null, roomCh = null, roomTimers = [], pendingReacts = {}, crowdGoals = { home: 0, away: 0 }, myMomentum = null, lastGoalReport = 0;
 
 for (const e of LIVE_EMOJIS) {
@@ -136,6 +137,7 @@ async function enterRoom(m) {
   document.body.dataset.league = m.channel || channel;
   room.hidden = false;
   roomFooter(true);
+  if (typeof voiceEnter === "function") voiceEnter();   // unlock sound now, while we still have the tap
   $("rHome").textContent = m.home; $("rAway").textContent = m.away;
   $("rMomHN").textContent = m.home; $("rMomAN").textContent = m.away;
   $("rCrowd").hidden = true; crowdGoals = { home: 0, away: 0 };
@@ -154,7 +156,8 @@ async function enterRoom(m) {
   }
   // live channel: who's here, flying reactions, new room messages and crowd events
   roomCh = sb.channel("room-" + m.id, { config: { presence: { key: me.id }, broadcast: { self: false } } })
-    .on("presence", { event: "sync" }, () => { $("rPeople").textContent = "👥 " + Math.max(1, Object.keys(roomCh.presenceState()).length); })
+    .on("presence", { event: "sync" }, () => { $("rPeople").textContent = "👥 " + Math.max(1, Object.keys(roomCh.presenceState()).length); if (typeof voicePresence === "function") voicePresence(); })
+    .on("broadcast", { event: "rtc" }, ({ payload }) => { if (typeof voiceSignal === "function") voiceSignal(payload); })
     .on("broadcast", { event: "react" }, ({ payload }) => { if (LIVE_EMOJIS.includes(payload?.e)) floatEmoji(payload.e); })
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${m.id}` }, (p) => {
       const list = byChannel[p.new.channel] || (byChannel[p.new.channel] = []);
@@ -162,7 +165,7 @@ async function enterRoom(m) {
       renderRoomFeed();
     })
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "crowd_events", filter: `match_id=eq.${m.id}` }, (p) => onCrowdEvent(p.new, true))
-    .subscribe(async (status) => { if (status === "SUBSCRIBED") await roomCh.track({ at: Date.now() }); });
+    .subscribe(async (status) => { if (status === "SUBSCRIBED") { roomPresence = { at: Date.now(), speaking: false }; await roomCh.track(roomPresence); } });
   // initial data
   const [{ data: msgs }, { data: evs }, { data: mom }] = await Promise.all([
     sb.from("messages").select("*").eq("match_id", m.id).order("created_at", { ascending: true }).limit(200),
@@ -191,6 +194,7 @@ async function enterRoom(m) {
 function leaveRoom(silent) {
   flushReactions();
   roomTimers.forEach(clearInterval); roomTimers = [];
+  if (typeof voiceLeave === "function") voiceLeave();
   roomCh?.unsubscribe(); roomCh = null; roomMatch = null;
   roomFooter(false);
   room.hidden = true;
