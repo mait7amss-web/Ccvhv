@@ -1,0 +1,42 @@
+name: Instagram posts
+
+on:
+  schedule:
+    - cron: "23 * * * *"     # every hour; the script posts at most one card per run, a few a day
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1 = render and upload the card but don't publish"
+        required: false
+        default: "0"
+
+concurrency:
+  group: instagram
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: https://bnjwhkilboybexkdvufc.supabase.co
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      IG_USER_ID: ${{ secrets.IG_USER_ID }}
+      IG_TOKEN: ${{ secrets.IG_TOKEN }}
+      DRY_RUN: ${{ inputs.dry_run || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Anything to post?
+        id: plan
+        run: node scripts/instagram.mjs plan
+      - name: Install the card renderer
+        if: steps.plan.outputs.todo == '1'
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Make the card and post it
+        if: steps.plan.outputs.todo == '1'
+        run: node scripts/instagram.mjs run
