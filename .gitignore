@@ -1,0 +1,8 @@
+# RuFlo runtime state (memory DBs, logs, daemon files) — local only
+.claude-flow/
+.swarm/
+.claude/proven-config.json
+.claude/.proven-config-version
+agentdb.rvf
+agentdb.rvf.idmap.json
+ruvector.db
