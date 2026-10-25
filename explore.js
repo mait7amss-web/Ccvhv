@@ -229,17 +229,19 @@ avatarEl = function (id) {
 let cmMembers = null, cmMembersAt = 0, cmMemberQuery = "";
 async function cmLoadMembers() {
   if (cmMembers && Date.now() - cmMembersAt < 2 * 60000) return;
-  const { data } = await sb.from("profiles").select("id,name,team,avatar_path,username,verified,created_at").not("banned", "is", true).order("created_at", { ascending: true }).limit(1000);
+  let { data, error } = await sb.from("profiles").select("id,name,team,avatar_path,username,verified,created_at,last_seen").not("banned", "is", true).order("created_at", { ascending: true }).limit(1000);
+  if (error) ({ data } = await sb.from("profiles").select("id,name,team,avatar_path,username,verified,created_at").not("banned", "is", true).order("created_at", { ascending: true }).limit(1000));
   const list = (data || []).filter((p) => !blocked.has(p.id));
-  for (const p of list) people[p.id] = { ...(people[p.id] || {}), name: p.name, team: p.team, avatar_path: p.avatar_path || null, username: p.username || null, verified: !!p.verified };
+  for (const p of list) people[p.id] = { ...(people[p.id] || {}), name: p.name, team: p.team, avatar_path: p.avatar_path || null, username: p.username || null, verified: !!p.verified, seen: p.last_seen || null };
+  if (people[me.id]) people[me.id].seen = new Date().toISOString();
   // Levels, 100 at a time
   const ids = list.map((p) => p.id);
   const chunks = []; for (let i = 0; i < ids.length; i += 100) chunks.push(ids.slice(i, i + 100));
   const lv = await Promise.all(chunks.map((c) => sb.rpc("user_levels", { ids: c }).then((r) => r.data || [], () => [])));
   for (const x of lv.flat()) if (people[x.id]) people[x.id].xp = x.xp;
-  // The official account first, then the most active
+  // Online now first, then the most active
   cmMembers = list.map((p) => ({ id: p.id, at: p.created_at })).sort((a, b) =>
-    (b.id === OFFICIAL_ID) - (a.id === OFFICIAL_ID) || (people[b.id]?.xp || 0) - (people[a.id]?.xp || 0));
+    mbOnline(b.id) - mbOnline(a.id) || (people[b.id]?.xp || 0) - (people[a.id]?.xp || 0));
   cmMembersAt = Date.now();
 }
 function cmDrawMembers() {
@@ -270,7 +272,9 @@ function cmDrawMembers() {
       if (people[id]?.username) sub.append(el("span", "cm-handle", "@" + people[id].username));
       const pill = teamPill(id); if (pill) sub.append(pill);
       info.append(sub);
-      who.append(avatarEl(id), info);
+      info.append(mbSeen(id));
+      const av = el("span", "mb-av"); av.append(avatarEl(id)); if (mbOnline(id)) av.append(el("i", "mb-dot"));
+      who.append(av, info);
       who.onclick = () => cmOpen("user", id);
       r.append(who);
       if (id !== me.id) {
@@ -295,3 +299,18 @@ function cmDrawMembers() {
   let t; inp.oninput = () => { cmMemberQuery = inp.value; clearTimeout(t); t = setTimeout(draw, 150); };
   draw();
 }
+
+/* ---------- آخر اتصال / متصل الآن ---------- */
+const MB_ONLINE_MS = 2.5 * 60000;
+const mbOnline = (id) => id === me.id || (people[id]?.seen && Date.now() - new Date(people[id].seen).getTime() < MB_ONLINE_MS) ? 1 : 0;
+function mbSeen(id) {
+  if (mbOnline(id)) return el("span", "mb-seen on", "🟢 متصل الآن");
+  const t = people[id]?.seen;
+  return el("span", "mb-seen", t ? "آخر اتصال: " + (cmAgo(t) === "الحين" ? "قبل شوي" : "قبل " + cmAgo(t)) : "آخر اتصال: من زمان");
+}
+// Tell the server I'm here: now, every minute while the app is open, and when I come back to it
+function touchSeen() { if (me?.id && document.visibilityState === "visible") sb.rpc("touch_seen").then(() => {}, () => {}); }
+setInterval(touchSeen, 60000);
+document.addEventListener("visibilitychange", touchSeen);
+const _startChatSeen = startChat;
+startChat = async function () { const r = await _startChatSeen(); touchSeen(); return r; };
