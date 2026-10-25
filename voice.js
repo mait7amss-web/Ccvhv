@@ -1,9 +1,9 @@
 // 🎙️ المدرج الصوتي: a live audio space inside every match room, like X Spaces.
-// You hear the room as soon as you walk in; tap «تكلم» to go on the mic (up to 6 speakers at once).
+// You hear the room as soon as you walk in; tap «تكلم» to go on the mic (no limit on speakers).
 // Audio goes phone-to-phone (WebRTC): each speaker sends their mic to everyone in the room, and the room's
 // realtime channel (live.js) carries the connection setup and who is speaking (presence).
 
-const VOICE_MAX_SPEAKERS = 6;
+const VOICE_AUDIO_POOL = 16;   // audio players unlocked on entry; more are made if needed
 let voiceIce = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
 const voice = {
   on: false, mic: null, speaking: false, muted: false,
@@ -38,7 +38,7 @@ $("vOut").onclick = () => {
 function voiceEnter() {
   voiceLeave();
   voice.on = true;
-  while (voice.pool.length < VOICE_MAX_SPEAKERS) {
+  while (voice.pool.length < VOICE_AUDIO_POOL) {
     const a = document.createElement("audio"); a.autoplay = true; a.playsInline = true; a.setAttribute("playsinline", "");
     voice.pool.push(a); document.body.append(a); a.hidden = true;
   }
@@ -150,7 +150,6 @@ function voiceNeedsTap() {
 async function voiceStartSpeaking() {
   if (!roomMatch || voice.speaking) return;
   const { here, speakers } = voicePeople();
-  if (speakers.size >= VOICE_MAX_SPEAKERS) { toast(`المنصة مليانة (${arNum(VOICE_MAX_SPEAKERS)} يتكلمون). انتظر أحد ينزل.`); return; }
   $("vMic").disabled = true;
   try {
     voice.mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
