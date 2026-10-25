@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#08130d">
 <title>هلا</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -955,6 +955,8 @@ body.sv-on .cm-fab, body:has(#studio) .cm-fab { display: none; }
 .inv-row .avatar { width: 32px; height: 32px; } .inv-row b { flex: 1; min-width: 0; font-size: 14px; }
 .inv-rank { width: 26px; text-align: center; font-weight: 800; } .inv-n { font: 400 22px var(--display); color: #2fbf5b; }
 /* the chat bar inside a match room */
+/* iPhone zooms in on any text box under 16px: keep them at 16px so the screen stays put */
+@supports (-webkit-touch-callout: none) { input, textarea, select { font-size: 16px !important; } }
 /* 💬 comments sheet */
 .sheet.cmt-sheet { height: 85%; padding-bottom: 0; }
 .cmt-list { flex: 1; overflow-y: auto; min-height: 120px; margin: 0 -6px; display: flex; flex-direction: column; gap: 6px; }
@@ -1110,8 +1112,8 @@ body.sv-on .cm-fab, body:has(#studio) .cm-fab { display: none; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=58"></script>
-<script src="tactics.js?v=58"></script>
-<script src="live.js?v=58"></script><script src="arena.js?v=58"></script><script src="community.js?v=58"></script><script src="explore.js?v=58"></script><script src="studio.js?v=58"></script><script src="invite.js?v=58"></script><script src="league.js?v=58"></script><script src="tour.js?v=58"></script><script src="dm.js?v=58"></script><script src="voice.js?v=58"></script>
+<script src="app.js?v=59"></script>
+<script src="tactics.js?v=59"></script>
+<script src="live.js?v=59"></script><script src="arena.js?v=59"></script><script src="community.js?v=59"></script><script src="explore.js?v=59"></script><script src="studio.js?v=59"></script><script src="invite.js?v=59"></script><script src="league.js?v=59"></script><script src="tour.js?v=59"></script><script src="dm.js?v=59"></script><script src="voice.js?v=59"></script>
 </body>
 </html>
