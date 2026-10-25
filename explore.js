@@ -306,7 +306,16 @@ const mbOnline = (id) => id === me.id || (people[id]?.seen && Date.now() - new D
 function mbSeen(id) {
   if (mbOnline(id)) return el("span", "mb-seen on", "🟢 متصل الآن");
   const t = people[id]?.seen;
-  return el("span", "mb-seen", t ? "آخر اتصال: " + (cmAgo(t) === "الحين" ? "قبل شوي" : "قبل " + cmAgo(t)) : "آخر اتصال: من زمان");
+  return el("span", "mb-seen", t ? "آخر اتصال: " + mbAgo(t) : "آخر اتصال: من زمان");
+}
+// "قبل ٥ دقايق" / "قبل ساعتين" / "قبل ١٢ يوم"
+function mbAgo(iso) {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  const word = (n, one, two, few, many) => n === 1 ? `قبل ${one}` : n === 2 ? `قبل ${two}` : `قبل ${arNum(n)} ${n <= 10 ? few : many}`;
+  if (s < 60) return "قبل شوي";
+  if (s < 3600) return word(Math.floor(s / 60), "دقيقة", "دقيقتين", "دقايق", "دقيقة");
+  if (s < 86400) return word(Math.floor(s / 3600), "ساعة", "ساعتين", "ساعات", "ساعة");
+  return word(Math.floor(s / 86400), "يوم", "يومين", "أيام", "يوم");
 }
 // Tell the server I'm here: now, every minute while the app is open, and when I come back to it
 function touchSeen() { if (me?.id && document.visibilityState === "visible") sb.rpc("touch_seen").then(() => {}, () => {}); }
