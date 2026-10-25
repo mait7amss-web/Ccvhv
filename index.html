@@ -955,6 +955,15 @@ body.sv-on .cm-fab, body:has(#studio) .cm-fab { display: none; }
 .inv-row .avatar { width: 32px; height: 32px; } .inv-row b { flex: 1; min-width: 0; font-size: 14px; }
 .inv-rank { width: 26px; text-align: center; font-weight: 800; } .inv-n { font: 400 22px var(--display); color: #2fbf5b; }
 /* the chat bar inside a match room */
+/* 💬 comments sheet */
+.sheet.cmt-sheet { height: 85%; padding-bottom: 0; }
+.cmt-list { flex: 1; overflow-y: auto; min-height: 120px; margin: 0 -6px; display: flex; flex-direction: column; gap: 6px; }
+.cmt-list .post { margin: 0; }
+.cmt-empty { text-align: center; padding: 30px 0; }
+.cmt-bar { position: sticky; bottom: 0; display: flex; gap: 8px; align-items: center; background: var(--pitch-2); border-top: 1px solid var(--line); margin: 0 -16px; padding: 10px 14px max(10px, env(safe-area-inset-bottom, 0px)); }
+.cmt-bar input { flex: 1; min-width: 0; font: 15px var(--body); color: var(--chalk); background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: 10px 14px; }
+.cmt-more { background: none; border: 0; font-size: 20px; padding: 4px; }
+.cmt-send { border-radius: 99px; padding: 9px 16px; }
 /* 🎙️ voice space in match rooms */
 .spc-bar { flex: none; margin: 6px 10px 0; padding: 8px 10px; border-radius: 14px; background: linear-gradient(135deg, #1c1236, var(--card)); border: 1px solid #3b2a66; }
 .spc-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
@@ -1101,8 +1110,8 @@ body.sv-on .cm-fab, body:has(#studio) .cm-fab { display: none; }
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=57"></script>
-<script src="tactics.js?v=57"></script>
-<script src="live.js?v=57"></script><script src="arena.js?v=57"></script><script src="community.js?v=57"></script><script src="explore.js?v=57"></script><script src="studio.js?v=57"></script><script src="invite.js?v=57"></script><script src="league.js?v=57"></script><script src="tour.js?v=57"></script><script src="dm.js?v=57"></script><script src="voice.js?v=57"></script>
+<script src="app.js?v=58"></script>
+<script src="tactics.js?v=58"></script>
+<script src="live.js?v=58"></script><script src="arena.js?v=58"></script><script src="community.js?v=58"></script><script src="explore.js?v=58"></script><script src="studio.js?v=58"></script><script src="invite.js?v=58"></script><script src="league.js?v=58"></script><script src="tour.js?v=58"></script><script src="dm.js?v=58"></script><script src="voice.js?v=58"></script>
 </body>
 </html>

@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 57; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 58; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -811,7 +811,7 @@ async function sendImageBlob(file, caption) {
 
 /* ---------- Bottom sheet ---------- */
 function openSheet(title, build) {
-  const s = $("sheet"); s.textContent = "";
+  const s = $("sheet"); s.textContent = ""; s.classList.remove("cmt-sheet");
   s.append(el("h3", null, title));
   build(s);
   $("sheetBg").hidden = false;

@@ -551,7 +551,7 @@ function postActions(p) {
     row.append(b);
   };
   act("repost", p.repost_count, "", () => repostSheet(p), "إعادة نشر");
-  act("reply", p.reply_count, "", () => composeSheet({ reply: p }), "رد");
+  act("reply", p.reply_count, "", () => commentsSheet(p), "التعليقات");
   act("like", p.like_count, cmLiked.has(p.id) ? "on" : "", (b) => cmToggleLike(p, b), "إعجاب");
   act("views", p.view_count, "", () => toast(`👀 شافه ${arNum(p.view_count || 0)} شخص`), "المشاهدات");
   act("save", 0, cmSaved.has(p.id) ? "on" : "", (b) => cmToggleSave(p, b), "حفظ");
@@ -1239,4 +1239,59 @@ async function shareProfileCard(uid, counts) {
     const cl = el("button", "cancel", "سكّر"); cl.type = "button"; cl.onclick = closeSheet;
     s.append(a, cl);
   });
+}
+
+/* ---------- 💬 comments: tap the comment button to see every comment and add yours ---------- */
+async function commentsSheet(p) {
+  openSheet(`💬 التعليقات (${arNum(p.reply_count || 0)})`, (s) => {
+    s.classList.add("cmt-sheet");
+    const list = el("div", "cmt-list"); list.append(el("div", "cm-loading", "يحمّل التعليقات…"));
+    const bar = el("form", "cmt-bar");
+    const inp = el("input"); inp.type = "text"; inp.maxLength = 500; inp.placeholder = "اكتب تعليقك…"; inp.enterKeyHint = "send";
+    const more = el("button", "cmt-more", "📎"); more.type = "button"; more.setAttribute("aria-label", "صورة أو صوت أو GIF");
+    more.onclick = () => { closeSheet(); composeSheet({ reply: p }); };
+    const send = el("button", "primary cmt-send", "أرسل"); send.type = "submit";
+    bar.append(avatarEl(me.id), inp, more, send);
+    bar.onsubmit = async (e) => {
+      e.preventDefault();
+      const body = inp.value.trim(); if (!body) { inp.focus(); return; }
+      send.disabled = true;
+      const { data, error } = await sb.from("posts").insert({ user_id: me.id, body, reply_to: p.id }).select(CM_COLS).single();
+      send.disabled = false;
+      if (error) { toast(cmErr(error) || "ما انرسل تعليقك."); return; }
+      await cmHydrate([data]);
+      p.reply_count = (p.reply_count || 0) + 1;
+      const tf = cmFeeds["thread:" + (p.root_id || p.id)]; if (tf && !tf.ids.includes(data.id)) tf.ids.push(data.id);
+      inp.value = "";
+      list.querySelector(".cmt-empty")?.remove();
+      list.append(cmtRow(data));
+      list.lastChild.scrollIntoView({ block: "end", behavior: "smooth" });
+      s.querySelector("h3").textContent = `💬 التعليقات (${arNum(p.reply_count)})`;
+      document.querySelectorAll(`.post[data-id="${p.id}"] .pa.reply .n`).forEach((n) => (n.textContent = cmShort(p.reply_count)));
+    };
+    // Opening a profile or a post from a comment leaves the sheet
+    list.addEventListener("click", (e) => {
+      if (!e.target.closest(".post") || e.target.closest(".post-acts, .poll, audio, video, img, .cm-audio, input, select")) return;
+      setTimeout(() => { if (!$("sheetBg").hidden && $("sheet").classList.contains("cmt-sheet")) closeSheet(); }, 0);
+    }, true);
+    s.append(list, bar);
+    setTimeout(() => inp.blur(), 0);   // show the comments first; the keyboard opens when they tap the box
+    cmtLoad(p, list);
+  });
+}
+async function cmtLoad(p, list) {
+  // A post's comments: the whole conversation under it (or the direct replies, for a comment)
+  const q = sb.from("posts").select(CM_COLS).order("created_at", { ascending: true }).limit(300);
+  const { data, error } = await (p.root_id ? q.eq("reply_to", p.id) : q.eq("root_id", p.id));
+  await cmHydrate(data || []);
+  list.textContent = "";
+  if (error) { list.append(el("p", "sheet-p", "ما قدرنا نحمّل التعليقات. جرّب مرة ثانية.")); return; }
+  const rows = (data || []).filter(cmVisible);
+  if (!rows.length) { list.append(el("p", "sheet-p cmt-empty", "ما فيه تعليقات للحين. كن أول واحد يعلّق 👇")); return; }
+  for (const r of rows) list.append(cmtRow(r));
+}
+function cmtRow(r) {
+  const card = postCard(r, { reply: true });
+  card.classList.add("cmt-row");
+  return card;
 }
