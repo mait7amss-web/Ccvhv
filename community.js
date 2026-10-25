@@ -777,6 +777,7 @@ function composeSheet({ reply = null, quote = null, take = false, match = null }
       s.append(q);
     }
     s.append(ta);
+    const picked = cmMentionPicker(ta);
     const preview = el("div", "cm-att"); s.append(preview);
 
     // Hot take: pick a match
@@ -889,6 +890,9 @@ function composeSheet({ reply = null, quote = null, take = false, match = null }
         row.mentions = [...new Set(found.map((x) => x.id))].filter((id) => id !== me.id);
         for (const x of found) people[x.id] = { ...(people[x.id] || { team: null }), name: x.name, ...(x.username ? { username: x.username } : {}) };
       }
+      // people picked from the @ list (exact even if two share a name)
+      const pickedIds = [...picked].filter(([n, id]) => (body || "").includes("@" + n) && id !== me.id).map(([, id]) => id);
+      if (pickedIds.length) row.mentions = [...new Set([...(row.mentions || []), ...pickedIds])];
       const { data, error } = await sb.from("posts").insert(row).select(CM_COLS).single();
       if (error) return cmErr(error);
       await cmHydrate([data]);
@@ -1252,11 +1256,13 @@ async function commentsSheet(p) {
     more.onclick = () => { closeSheet(); composeSheet({ reply: p }); };
     const send = el("button", "primary cmt-send", "أرسل"); send.type = "submit";
     bar.append(avatarEl(me.id), inp, more, send);
+    const picked = cmMentionPicker(inp, bar);
     bar.onsubmit = async (e) => {
       e.preventDefault();
       const body = inp.value.trim(); if (!body) { inp.focus(); return; }
       send.disabled = true;
-      const { data, error } = await sb.from("posts").insert({ user_id: me.id, body, reply_to: p.id }).select(CM_COLS).single();
+      const mentions = await cmMentionIds(body, picked);
+      const { data, error } = await sb.from("posts").insert({ user_id: me.id, body, reply_to: p.id, mentions }).select(CM_COLS).single();
       send.disabled = false;
       if (error) { toast(cmErr(error) || "ما انرسل تعليقك."); return; }
       await cmHydrate([data]);
@@ -1294,4 +1300,68 @@ function cmtRow(r) {
   const card = postCard(r, { reply: true });
   card.classList.add("cmt-row");
   return card;
+}
+
+/* ---------- @ منشن: type @ and pick any member ---------- */
+// Shows a member list under the box while you type @name; returns name -> id for the people picked.
+function cmMentionPicker(input, anchor) {
+  const picked = new Map();
+  const box = el("div", "mentions cm-mbox"); box.hidden = true;
+  (anchor || input).before(box);
+  let seq = 0;
+  const close = () => { box.hidden = true; box.textContent = ""; };
+  input.addEventListener("input", async () => {
+    const pos = input.selectionStart ?? input.value.length;
+    const before = input.value.slice(0, pos);
+    const mt = before.match(/(^|\s)@([^\s@]{0,20})$/);
+    if (!mt) return close();
+    const q = mt[2], my = ++seq;
+    const clean = q.replace(/[%_,()]/g, "");
+    let query = sb.from("profiles").select("id,name,username,team").neq("id", me.id).not("banned", "is", true).limit(8);
+    if (clean) query = query.or(`name.ilike.${clean}%,username.ilike.${clean.toLowerCase()}%`);
+    else query = query.order("created_at", { ascending: false });
+    let { data } = await query;
+    if (my !== seq) return;
+    const local = Object.entries(people).filter(([id, x]) => id !== me.id && x.name && (!clean || x.name.startsWith(clean) || x.username?.startsWith(clean.toLowerCase()))).map(([id, x]) => ({ id, ...x }));
+    const list = [...(data || [])];
+    for (const x of local) if (!list.some((y) => y.id === x.id)) list.push(x);
+    box.textContent = "";
+    if (!list.length) return close();
+    for (const x of list.slice(0, 8)) {
+      if (x.name) people[x.id] = { ...(people[x.id] || {}), name: x.name, team: x.team ?? people[x.id]?.team ?? null, ...(x.username ? { username: x.username } : {}) };
+      const b = el("button", "mopt"); b.type = "button";
+      b.append(avatarEl(x.id), el("span", null, x.name));
+      if (x.username) b.append(el("small", "cm-handle", "@" + x.username));
+      b.onmousedown = (e) => e.preventDefault();   // keep the keyboard open
+      b.onclick = () => {
+        const start = before.length - q.length - 1;
+        input.value = input.value.slice(0, start) + "@" + x.name + " " + input.value.slice(pos);
+        const caret = start + x.name.length + 2;
+        input.setSelectionRange(caret, caret);
+        picked.set(x.name, x.id);
+        close(); input.focus(); input.dispatchEvent(new Event("input"));
+      };
+      box.append(b);
+    }
+    box.hidden = false;
+  });
+  input.addEventListener("blur", () => setTimeout(close, 200));
+  return picked;
+}
+// The ids of everyone @mentioned in a text (picked from the list, or typed by name / username)
+async function cmMentionIds(body, picked) {
+  const names = [...new Set([...(body || "").matchAll(/@([^\s@#،,.!?؟]+)/g)].map((x) => x[1]))].slice(0, 10);
+  if (!names.length) return [];
+  // picked from the list (names can have spaces, so match the whole name)
+  const ids = new Set([...(picked || [])].filter(([n]) => body.includes("@" + n)).map(([, id]) => id));
+  const rest = names.filter((n) => ![...(picked || [])].some(([pn]) => pn === n || pn.startsWith(n + " ")));
+  if (rest.length) {
+    const [{ data: a }, { data: b }] = await Promise.all([
+      sb.from("profiles").select("id,name").in("name", rest),
+      sb.from("profiles").select("id,name,username").in("username", rest.map((n) => n.toLowerCase())),
+    ]);
+    for (const x of [...(a || []), ...(b || [])]) ids.add(x.id);
+  }
+  ids.delete(me.id);
+  return [...ids];
 }

@@ -259,7 +259,7 @@ async function directMessage(dmId: number) {
 // Someone wrote a new post in the community: tell everyone (who kept community alerts on), except the
 // author and people who blocked them. One notification per post.
 async function newPost(postId: number) {
-  const { data: post } = await sb.from("posts").select("id,user_id,body,image_path,gif_url,audio_path,poll,quote_of,hidden,reply_to").eq("id", postId).maybeSingle();
+  const { data: post } = await sb.from("posts").select("id,user_id,body,image_path,gif_url,audio_path,poll,quote_of,hidden,reply_to,mentions").eq("id", postId).maybeSingle();
   if (!post || post.hidden || post.reply_to) return new Response("skip", { status: 200 });
   const [{ data: actor }, { data: blockers }, subsRes] = await Promise.all([
     sb.from("profiles").select("name,banned").eq("id", post.user_id).maybeSingle(),
@@ -269,7 +269,8 @@ async function newPost(postId: number) {
   if (actor?.banned) return new Response("skip", { status: 200 });
   let subs = subsRes.data;
   if (subsRes.error) subs = (await sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").neq("user_id", post.user_id)).data;
-  const skip = new Set((blockers || []).map((b) => b.blocker));
+  // mentioned people get their own "منشنك" push instead
+  const skip = new Set([...(blockers || []).map((b) => b.blocker), ...(post.mentions || [])]);
   const list = (subs || []).filter((s) => !skip.has(s.user_id));
   if (!list.length) return new Response("no devices", { status: 200 });
   const text = post.body ? (post.body.length > 140 ? post.body.slice(0, 139) + "…" : post.body)
