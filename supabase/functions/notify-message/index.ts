@@ -33,7 +33,7 @@ async function loadConfig() {
   return config;
 }
 
-// The app only sends goal notifications (official goals from the live feed).
+// The app sends goal notifications, plus community pushes (new posts, replies, mentions, follows, quotes).
 const GOALS_ONLY = true;
 
 Deno.serve(async (req) => {
@@ -43,7 +43,9 @@ Deno.serve(async (req) => {
 
   const input = await req.json().catch(() => ({}));
   if (input.event_id) return crowdEvent(input.event_id);
-  // Goals only: chat, debates, community, direct messages and other match moments don't send pushes
+  if (input.post_id) return newPost(input.post_id);
+  if (input.notif_id) return communityNotif(input.notif_id);
+  // Chat, debates, direct messages and other match moments do not send pushes
   if (GOALS_ONLY) return new Response("goals-only mode", { status: 200 });
   if (input.arena_id) return arenaStart(input.arena_id);
   if (input.notif_id) return communityNotif(input.notif_id);
@@ -252,4 +254,34 @@ async function directMessage(dmId: number) {
   }));
   if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
   return new Response(`dm sent ${subs.length - dead.length}`, { status: 200 });
+}
+
+// Someone wrote a new post in the community: tell everyone (who kept community alerts on), except the
+// author and people who blocked them. One notification per post.
+async function newPost(postId: number) {
+  const { data: post } = await sb.from("posts").select("id,user_id,body,image_path,gif_url,audio_path,poll,quote_of,hidden,reply_to").eq("id", postId).maybeSingle();
+  if (!post || post.hidden || post.reply_to) return new Response("skip", { status: 200 });
+  const [{ data: actor }, { data: blockers }, subsRes] = await Promise.all([
+    sb.from("profiles").select("name,banned").eq("id", post.user_id).maybeSingle(),
+    sb.from("blocks").select("blocker").eq("blocked", post.user_id),
+    sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").eq("community", true).neq("user_id", post.user_id),
+  ]);
+  if (actor?.banned) return new Response("skip", { status: 200 });
+  let subs = subsRes.data;
+  if (subsRes.error) subs = (await sb.from("push_subscriptions").select("endpoint,p256dh,auth,user_id").neq("user_id", post.user_id)).data;
+  const skip = new Set((blockers || []).map((b) => b.blocker));
+  const list = (subs || []).filter((s) => !skip.has(s.user_id));
+  if (!list.length) return new Response("no devices", { status: 200 });
+  const text = post.body ? (post.body.length > 140 ? post.body.slice(0, 139) + "…" : post.body)
+    : post.image_path ? "📷 صورة" : post.gif_url ? "🎞️ GIF" : post.audio_path ? "🎙️ مقطع صوتي" : post.poll ? "📊 تصويت" : "✍️ منشور جديد";
+  const payload = JSON.stringify({ title: `📝 ${actor?.name || "عضو"} كتب في المجتمع`, body: text, url: `./?view=community&post=${post.id}`, tag: `post-${post.id}` });
+  const dead: string[] = [];
+  for (let i = 0; i < list.length; i += 50) {
+    await Promise.all(list.slice(i, i + 50).map(async (s) => {
+      try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 3600 }); }
+      catch (e) { const c = (e as { statusCode?: number }).statusCode; if (c === 404 || c === 410) dead.push(s.endpoint); }
+    }));
+  }
+  if (dead.length) await sb.from("push_subscriptions").delete().in("endpoint", dead);
+  return new Response(`post sent ${list.length - dead.length}`, { status: 200 });
 }

@@ -103,7 +103,7 @@ async function notifPrompt() {
   try { localStorage.setItem("hala.notifAsk", String(Date.now())); } catch {}
   openSheet("🔔 لا يفوتك ولا هدف!", (s) => {
     const ios = isIOS && !isStandalone();
-    s.append(el("p", "sheet-p", "فعّل الإشعارات ويوصلك إشعار مع كل هدف ⚽ في مباريات الأندية الكبرى، أول بأول."));
+    s.append(el("p", "sheet-p", "فعّل الإشعارات ويوصلك إشعار مع كل هدف ⚽ في مباريات الأندية الكبرى، ولما أحد يكتب في المجتمع 📝."));
     if (ios) {
       s.append(el("p", "sheet-p", "على الآيفون لازم أول تضيف التطبيق للشاشة الرئيسية:"));
       const ol = el("ol", "steps");

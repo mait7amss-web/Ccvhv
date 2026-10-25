@@ -22,7 +22,7 @@ const TEAMS = {
 const TEAM_BY_ID = {};
 for (const lg in TEAMS) for (const [id, name, color] of TEAMS[lg]) TEAM_BY_ID[id] = { id, name, color };
 
-const APP_VERSION = 55; // keep in sync with version.json and the ?v= in index.html
+const APP_VERSION = 56; // keep in sync with version.json and the ?v= in index.html
 
 // When a newer version is published, reload once to pick it up (the home-screen app can stay open for days).
 async function checkForUpdate() {
@@ -1355,7 +1355,7 @@ async function renderNotif(box) {
   const sub = await currentSub();
   const { data: row } = sub ? await sb.from("push_subscriptions").select("*").eq("endpoint", sub.endpoint).maybeSingle() : { data: null };
   if (!sub || !row) {
-    box.append(el("p", null, "⚽ يوصلك إشعار مع كل هدف في مباريات الأندية الكبرى، أول بأول."));
+    box.append(el("p", null, "⚽ يوصلك إشعار مع كل هدف في مباريات الأندية الكبرى، و📝 لما أحد يكتب في المجتمع."));
     const on = el("button", "primary", "فعّل الإشعارات"); on.type = "button";
     const err = el("div", "err"); err.hidden = true;
     on.onclick = async () => {
@@ -1380,6 +1380,7 @@ async function renderNotif(box) {
     l.append(el("span", null, label), i); return l;
   };
   box.append(toggle("⚽ إشعار مع كل هدف", "live"));
+  if ("community" in row) box.append(toggle("📝 إشعار لما أحد يكتب في المجتمع", "community"));
   box.append(el("p", null, "🏟️ أهداف مباريات:"));
   const grid = el("div", "lgs");
   for (const c of CHANNELS) {
