@@ -1,0 +1,51 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mimadoz Cake 3D</title>
+<style>
+:root{--bg:#e9e3d9;--panel:#fffaf2;--ink:#2d2a26;--accent:#7f8f6a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1f1d1a;--panel:#2b2824;--ink:#f0ebe3;--accent:#a9b893}}
+:root[data-theme="dark"]{--bg:#1f1d1a;--panel:#2b2824;--ink:#f0ebe3;--accent:#a9b893}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;overflow:hidden}
+#ui{position:fixed;top:12px;right:12px;left:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;pointer-events:none}
+#ui>*{pointer-events:auto}
+h1{font-size:16px;margin:0 0 0 auto;padding:8px 12px;background:var(--panel);border-radius:10px}
+button{font:inherit;font-size:14px;border:1px solid var(--accent);background:var(--panel);color:var(--ink);padding:8px 12px;border-radius:10px;cursor:pointer}
+button.on{background:var(--accent);color:#fff}
+#hint{position:fixed;bottom:12px;right:12px;left:12px;text-align:center;font-size:13px;opacity:.75}
+canvas{display:block}
+</style></head><body>
+<div id="ui"><h1>Mimadoz Cake · معاينة</h1>
+<button id="b-canopy" class="on">المظلة</button>
+<button id="b-fences" class="on">الحواجز</button>
+<button id="b-front">من قدام</button>
+<button id="b-top">من فوق</button>
+<button id="b-iso">زاوية</button></div>
+<div id="hint">اسحب للتدوير · قرّب بإصبعين أو بعجلة الماوس · المقاس 300×300 مم</div>
+<script>/*THREE*/</script>
+<script>/*DATA*/
+const W=innerWidth,H=innerHeight;
+const r=new THREE.WebGLRenderer({antialias:true});r.setPixelRatio(Math.min(devicePixelRatio,2));r.setSize(W,H);
+r.shadowMap.enabled=true;r.shadowMap.type=THREE.PCFSoftShadowMap;document.body.appendChild(r.domElement);
+const s=new THREE.Scene();
+const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();s.background=new THREE.Color(bg);
+s.add(new THREE.HemisphereLight(0xfff6e8,0x8a7c6a,0.75));
+const d=new THREE.DirectionalLight(0xffffff,0.9);d.position.set(-120,-220,380);d.target.position.set(150,150,0);d.castShadow=true;
+Object.assign(d.shadow.camera,{left:-260,right:260,top:260,bottom:-260,near:1,far:1200});d.shadow.mapSize.set(2048,2048);d.shadow.bias=-0.0006;
+s.add(d,d.target);
+const cam=new THREE.PerspectiveCamera(35,W/H,1,4000);cam.up.set(0,0,1);
+const ctl=new THREE.OrbitControls(cam,r.domElement);ctl.target.set(150,140,25);ctl.enableDamping=true;
+const views={front:[180,-330,160],top:[150,130,560],iso:[-80,-280,380]};
+function go(v){cam.position.set(...views[v]);ctl.update();}
+const loader=new THREE.STLLoader(),meshes={};
+const colors={body:0xeee6d8,canopy:0xfbf9f4,fences:0x26262a};
+for(const [k,b] of Object.entries(DATA)){
+ const bin=Uint8Array.from(atob(b),c=>c.charCodeAt(0)).buffer;const g=loader.parse(bin);
+ const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:colors[k],roughness:.85,metalness:k==='fences'?.3:0}));
+ m.castShadow=m.receiveShadow=true;s.add(m);meshes[k]=m;}
+for(const k of ['canopy','fences']){const b=document.getElementById('b-'+k);
+ b.onclick=()=>{meshes[k].visible=!meshes[k].visible;b.classList.toggle('on',meshes[k].visible);};}
+for(const v in views)document.getElementById('b-'+v).onclick=()=>go(v);
+go(innerWidth<700?'top':'iso');
+addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();r.setSize(innerWidth,innerHeight);});
+(function loop(){ctl.update();r.render(s,cam);requestAnimationFrame(loop);})();
+</script></body></html>
