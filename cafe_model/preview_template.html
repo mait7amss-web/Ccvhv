@@ -13,13 +13,23 @@ button{font:inherit;font-size:14px;border:1px solid var(--accent);background:var
 button.on{background:var(--accent);color:#fff}
 #hint{position:fixed;bottom:12px;right:12px;left:12px;text-align:center;font-size:13px;opacity:.75}
 canvas{display:block}
+#gal{position:fixed;inset:0;background:var(--bg);overflow:auto;padding:16px;box-sizing:border-box;z-index:5}
+#gal-head{display:flex;justify-content:space-between;align-items:center;margin:0 0 12px}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+#grid figure{margin:0;background:var(--panel);border-radius:12px;overflow:hidden;cursor:zoom-in}
+#grid img{width:100%;display:block}#grid figcaption{padding:8px 12px;font-size:14px}
+#big{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:zoom-out;padding:16px;box-sizing:border-box}
+#big[hidden],#gal[hidden]{display:none}#big img{max-width:100%;max-height:85vh;border-radius:8px}#big-cap{color:#fff;margin-top:10px}
 </style></head><body>
 <div id="ui"><h1>Mimadoz Cake · معاينة</h1>
 <button id="b-canopy" class="on">المظلة</button>
 <button id="b-fences" class="on">الحواجز</button>
 <button id="b-front">من قدام</button>
 <button id="b-top">من فوق</button>
-<button id="b-iso">زاوية</button></div>
+<button id="b-iso">زاوية</button>
+<button id="b-gal">الصور</button></div>
+<div id="gal" hidden><div id="gal-head"><b>صور من كل الاتجاهات</b><button id="gal-x">رجوع للمجسّم</button></div><div id="grid"></div></div>
+<div id="big" hidden><img id="big-img" alt=""><div id="big-cap"></div></div>
 <div id="hint">اسحب للتدوير · قرّب بإصبعين أو بعجلة الماوس · المقاس 300×300 مم</div>
 <script>/*THREE*/</script>
 <script>/*DATA*/
@@ -45,6 +55,11 @@ for(const [k,b] of Object.entries(DATA)){
 for(const k of ['canopy','fences']){const b=document.getElementById('b-'+k);
  b.onclick=()=>{meshes[k].visible=!meshes[k].visible;b.classList.toggle('on',meshes[k].visible);};}
 for(const v in views)document.getElementById('b-'+v).onclick=()=>go(v);
+/*GALLERY*/
+const grid=document.getElementById('grid'),gal=document.getElementById('gal'),big=document.getElementById('big');
+for(const [cap,src] of GALLERY){const f=document.createElement('figure');f.innerHTML=`<img src="${src}" alt="${cap}"><figcaption>${cap}</figcaption>`;
+ f.onclick=()=>{document.getElementById('big-img').src=src;document.getElementById('big-cap').textContent=cap;big.hidden=false;};grid.appendChild(f);}
+document.getElementById('b-gal').onclick=()=>gal.hidden=false;document.getElementById('gal-x').onclick=()=>gal.hidden=true;big.onclick=()=>big.hidden=true;
 go(innerWidth<700?'top':'iso');
 addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();r.setSize(innerWidth,innerHeight);});
 (function loop(){ctl.update();r.render(s,cam);requestAnimationFrame(loop);})();

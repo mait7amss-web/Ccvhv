@@ -15,5 +15,6 @@ js = "".join(open(f"{T128}/{p}").read() + "\n" for p in
              ("build/three.min.js", "examples/js/controls/OrbitControls.js", "examples/js/loaders/STLLoader.js"))
 html = open("preview_template.html").read()
 html = html.replace("/*THREE*/", js).replace("/*DATA*/", "const DATA=" + __import__("json").dumps(parts) + ";")
+html = html.replace("/*GALLERY*/", "const GALLERY=" + open(__import__("os").environ["GAL"]).read() + ";")
 open("cafe_preview.html", "w").write(html)
 print("size MB", round(len(html) / 1e6, 2))
